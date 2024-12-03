@@ -18,7 +18,7 @@ package com.hippo.ehviewer.gallery;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import com.hippo.glgallery.GalleryProvider;
+import com.hippo.lib.glgallery.GalleryProvider;
 import com.hippo.unifile.UniFile;
 
 public abstract class GalleryProvider2 extends GalleryProvider {
@@ -29,6 +29,7 @@ public abstract class GalleryProvider2 extends GalleryProvider {
             ".jpeg",
             ".png", // Portable Network Graphics
             ".gif", // Graphics Interchange Format
+            ".webp"
     };
 
     public int getStartPage() {

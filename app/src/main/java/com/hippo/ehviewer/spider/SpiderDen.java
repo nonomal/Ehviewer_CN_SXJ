@@ -19,7 +19,9 @@ package com.hippo.ehviewer.spider;
 import android.content.Context;
 import android.graphics.BitmapFactory;
 import android.webkit.MimeTypeMap;
+
 import androidx.annotation.Nullable;
+
 import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.ehviewer.EhDB;
 import com.hippo.ehviewer.Settings;
@@ -33,10 +35,11 @@ import com.hippo.streampipe.InputStreamPipe;
 import com.hippo.streampipe.OutputStreamPipe;
 import com.hippo.unifile.FilenameFilter;
 import com.hippo.unifile.UniFile;
-import com.hippo.yorozuya.FileUtils;
-import com.hippo.yorozuya.IOUtils;
-import com.hippo.yorozuya.MathUtils;
-import com.hippo.yorozuya.Utilities;
+import com.hippo.lib.yorozuya.FileUtils;
+import com.hippo.lib.yorozuya.IOUtils;
+import com.hippo.lib.yorozuya.MathUtils;
+import com.hippo.lib.yorozuya.Utilities;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -47,7 +50,9 @@ public final class SpiderDen {
     @Nullable
     private final UniFile mDownloadDir;
     private volatile int mMode = SpiderQueen.MODE_READ;
-    private final long mGid;
+
+
+    private long mGid;
 
     @Nullable
     private static SimpleDiskCache sCache;
@@ -57,7 +62,7 @@ public final class SpiderDen {
                 MathUtils.clamp(Settings.getReadCacheSize(), 40, 640) * 1024 * 1024);
     }
 
-    private static class StartWithFilenameFilter implements FilenameFilter {
+    public static class StartWithFilenameFilter implements FilenameFilter {
 
         private final String mPrefix;
 
@@ -121,6 +126,10 @@ public final class SpiderDen {
         mDownloadDir = getGalleryDownloadDir(galleryInfo);
     }
 
+    public void setMGid(long mGid) {
+        this.mGid = mGid;
+    }
+
     public void setMode(@SpiderQueen.Mode int mode) {
         mMode = mode;
 
@@ -149,6 +158,10 @@ public final class SpiderDen {
         return mDownloadDir != null && mDownloadDir.isDirectory() ? mDownloadDir : null;
     }
 
+    public UniFile getDownloadDirName() {
+        return mDownloadDir != null ? mDownloadDir : null;
+    }
+
     private boolean containInCache(int index) {
         if (sCache == null) {
             return false;
@@ -166,7 +179,7 @@ public final class SpiderDen {
     }
 
     @Nullable
-    private static UniFile findImageFile(UniFile dir, int index) {
+    public static UniFile findImageFile(UniFile dir, int index) {
         for (String extension : GalleryProvider2.SUPPORT_IMAGE_EXTENSIONS) {
             String filename = generateImageFilename(index, extension);
             UniFile file = dir.findFile(filename);
@@ -308,8 +321,12 @@ public final class SpiderDen {
         if (dir == null) {
             return null;
         }
+        if (extension==null||!extension.contains(".")){
+            extension = fixExtension('.' + extension);
+        }else {
+            extension = fixExtension(extension);
+        }
 
-        extension = fixExtension('.' + extension);
         UniFile file = dir.createFile(generateImageFilename(index, extension));
         if (file != null) {
             return new UniFileOutputStreamPipe(file);
@@ -367,9 +384,9 @@ public final class SpiderDen {
     @Nullable
     public InputStreamPipe openInputStreamPipe(int index) {
         if (mMode == SpiderQueen.MODE_READ) {
-            InputStreamPipe pipe = openCacheInputStreamPipe(index);
+            InputStreamPipe pipe = openDownloadInputStreamPipe(index);
             if (pipe == null) {
-                pipe = openDownloadInputStreamPipe(index);
+                pipe = openCacheInputStreamPipe(index);
             }
             return pipe;
         } else if (mMode == SpiderQueen.MODE_DOWNLOAD) {

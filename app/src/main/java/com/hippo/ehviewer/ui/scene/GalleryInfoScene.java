@@ -41,9 +41,9 @@ import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ripple.Ripple;
-import com.hippo.yorozuya.AssertUtils;
-import com.hippo.yorozuya.LayoutUtils;
-import com.hippo.yorozuya.ViewUtils;
+import com.hippo.lib.yorozuya.AssertUtils;
+import com.hippo.lib.yorozuya.LayoutUtils;
+import com.hippo.lib.yorozuya.ViewUtils;
 import java.util.ArrayList;
 
 public final class GalleryInfoScene extends ToolbarScene implements EasyRecyclerView.OnItemClickListener {
@@ -223,7 +223,7 @@ public final class GalleryInfoScene extends ToolbarScene implements EasyRecycler
     }
 
     @Override
-    public void onNavigationClick() {
+    public void onNavigationClick(View view) {
         onBackPressed();
     }
 

@@ -17,7 +17,6 @@
 package com.hippo.ehviewer.ui.scene.gallery.list;
 
 import android.content.Context;
-import android.content.DialogInterface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.NinePatchDrawable;
 import android.os.Bundle;
@@ -26,6 +25,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -46,15 +46,14 @@ import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.ehviewer.client.EhUrl;
 import com.hippo.ehviewer.client.data.userTag.UserTag;
 import com.hippo.ehviewer.client.data.userTag.UserTagList;
-import com.hippo.ehviewer.ui.scene.BaseScene;
 import com.hippo.ehviewer.ui.scene.EhCallback;
 import com.hippo.ehviewer.ui.scene.ToolbarScene;
 import com.hippo.scene.SceneFragment;
 import com.hippo.util.DrawableManager;
 import com.hippo.view.ViewTransition;
 import com.hippo.widget.ProgressView;
-import com.hippo.yorozuya.AssertUtils;
-import com.hippo.yorozuya.ViewUtils;
+import com.hippo.lib.yorozuya.AssertUtils;
+import com.hippo.lib.yorozuya.ViewUtils;
 
 import java.util.ArrayList;
 
@@ -159,15 +158,19 @@ public final class SubscriptionsScene extends ToolbarScene {
     }
 
     @Override
-    public void onNavigationClick() {
+    public void onNavigationClick(View view) {
         onBackPressed();
     }
 
     private void bindSecond() {
         progressView.setVisibility(View.GONE);
-        assert mRecyclerView != null;
+        if (mRecyclerView == null){
+            Toast.makeText(context,"描述文件未找到？？？重启试试~",Toast.LENGTH_LONG).show();
+            return;
+        }
         mRecyclerView.setVisibility(View.VISIBLE);
         if (userTagList == null){
+            userTagList = new UserTagList();
             userTagList.userTags = new ArrayList<>();
         }
         // drag & drop manager
@@ -313,13 +316,15 @@ public final class SubscriptionsScene extends ToolbarScene {
 
         @Override
         public void onSuccess(UserTagList result) {
-            EhApplication.saveUserTagList(context,result);
-            if (result == null){
+            if (userTagList==null){
+                userTagList =  new UserTagList();
+            }
+            if (result == null || result.userTags == null){
                 userTagList.userTags = new ArrayList<>();
             }else {
                 userTagList.userTags = result.userTags;
             }
-
+            EhApplication.saveUserTagList(context,result);
             bindSecond();
         }
 

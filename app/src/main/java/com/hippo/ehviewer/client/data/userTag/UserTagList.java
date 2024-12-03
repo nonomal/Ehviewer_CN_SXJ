@@ -4,6 +4,7 @@ package com.hippo.ehviewer.client.data.userTag;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class UserTagList implements Parcelable {
@@ -11,6 +12,7 @@ public class UserTagList implements Parcelable {
     public List<UserTag> userTags;
     public int stageId;
     public UserTagList() {
+        userTags = new ArrayList<>();
     }
 
     protected UserTagList(Parcel in) {
@@ -41,5 +43,9 @@ public class UserTagList implements Parcelable {
 
     public UserTag get(int index){
         return userTags.get(index);
+    }
+
+    public int size(){
+        return userTags.size();
     }
 }

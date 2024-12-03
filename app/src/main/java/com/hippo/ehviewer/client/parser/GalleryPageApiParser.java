@@ -18,7 +18,7 @@ package com.hippo.ehviewer.client.parser;
 
 import android.text.TextUtils;
 import com.hippo.ehviewer.client.exception.ParseException;
-import com.hippo.yorozuya.StringUtils;
+import com.hippo.lib.yorozuya.StringUtils;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.json.JSONException;
@@ -28,7 +28,8 @@ public class GalleryPageApiParser {
 
     private static final Pattern PATTERN_IMAGE_URL = Pattern.compile("<img[^>]*src=\"([^\"]+)\" style");
     private static final Pattern PATTERN_SKIP_HATH_KEY = Pattern.compile("onclick=\"return nl\\('([^\\)]+)'\\)");
-    private static final Pattern PATTERN_ORIGIN_IMAGE_URL = Pattern.compile("<a href=\"([^\"]+)fullimg.php([^\"]+)\">");
+    private static final Pattern PATTERN_ORIGIN_IMAGE_URL = Pattern.compile("<a href=\"([^\"]+)fullimg([^\"]+)\">");
+    private static final Pattern PATTERN_ORIGIN_IMAGE_URL_NEW = Pattern.compile("<a href=\"#\" onclick=\"prompt\\('Copy the URL below.', '([^\"]+)'\\)");
 
     public static Result parse(String body) throws ParseException {
         try {
@@ -50,11 +51,22 @@ public class GalleryPageApiParser {
             if (m.find()) {
                 result.skipHathKey = StringUtils.unescapeXml(StringUtils.trim(m.group(1)));
             }
-            String i7 = jo.getString("i7");
-            m = PATTERN_ORIGIN_IMAGE_URL.matcher(i7);
+
+            m = PATTERN_ORIGIN_IMAGE_URL_NEW.matcher(i6);
             if (m.find()) {
-                result.originImageUrl = StringUtils.unescapeXml(m.group(1)) + "fullimg.php" + StringUtils.unescapeXml(m.group(2));
+                result.otherImageUrl = StringUtils.unescapeXml(m.group(1));
             }
+
+            if (jo.isNull("i7")){
+                m = PATTERN_ORIGIN_IMAGE_URL.matcher(i6);
+            }else {
+                String i7 = jo.getString("i7");
+                m = PATTERN_ORIGIN_IMAGE_URL.matcher(i7);
+            }
+            if (m.find()) {
+                result.originImageUrl = StringUtils.unescapeXml(m.group(1)) + "fullimg" + StringUtils.unescapeXml(m.group(2));
+            }
+
 
             if (!TextUtils.isEmpty(result.imageUrl)) {
                 return result;
@@ -68,6 +80,7 @@ public class GalleryPageApiParser {
 
     public static class Result {
         public String imageUrl;
+        public String otherImageUrl;
         public String skipHathKey;
         public String originImageUrl;
     }

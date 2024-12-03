@@ -16,13 +16,22 @@
 
 package com.hippo.ehviewer;
 
+import static com.hippo.ehviewer.ui.fragment.AdvancedFragment.DB_LOADING;
+import static com.hippo.ehviewer.ui.fragment.AdvancedFragment.LOADING_PROGRESS;
+import static com.hippo.ehviewer.ui.fragment.AdvancedFragment.LOADING_STATUS;
+
 import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
 import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.client.data.ListUrlBuilder;
 import com.hippo.ehviewer.dao.BlackList;
@@ -47,14 +56,14 @@ import com.hippo.ehviewer.dao.QuickSearchDao;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.util.SqlUtils;
-import com.hippo.util.TimeUtils;
-import com.hippo.yorozuya.IOUtils;
-import com.hippo.yorozuya.ObjectUtils;
-import com.hippo.yorozuya.collect.SparseJLArray;
+import com.hippo.lib.yorozuya.IOUtils;
+import com.hippo.lib.yorozuya.ObjectUtils;
+import com.hippo.lib.yorozuya.collect.SparseJLArray;
 
 import org.greenrobot.greendao.AbstractDao;
 import org.greenrobot.greendao.query.CloseableListIterator;
 import org.greenrobot.greendao.query.LazyList;
+import org.greenrobot.greendao.query.QueryBuilder;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -70,7 +79,7 @@ public class EhDB {
 
     private static final String TAG = EhDB.class.getSimpleName();
 
-    private static final int MAX_HISTORY_COUNT = 100;
+    public static int MAX_HISTORY_COUNT = 100;
 
     private static DaoSession sDaoSession;
 
@@ -101,10 +110,10 @@ public class EhDB {
 //                FilterDao.createTable(db, true);
             case 2: // 2 to 3, add ENABLE column to table FILTER
                 db.execSQL("CREATE TABLE " + "\"FILTER2\" (" +
-                    "\"_id\" INTEGER PRIMARY KEY ," +
-                    "\"MODE\" INTEGER NOT NULL ," +
-                    "\"TEXT\" TEXT," +
-                    "\"ENABLE\" INTEGER);");
+                        "\"_id\" INTEGER PRIMARY KEY ," +
+                        "\"MODE\" INTEGER NOT NULL ," +
+                        "\"TEXT\" TEXT," +
+                        "\"ENABLE\" INTEGER);");
                 db.execSQL("INSERT INTO \"FILTER2\" (" +
                         "_id, MODE, TEXT, ENABLE)" +
                         "SELECT _id, MODE, TEXT, 1 FROM FILTER;");
@@ -112,22 +121,22 @@ public class EhDB {
                 db.execSQL("ALTER TABLE FILTER2 RENAME TO FILTER");
             case 3: // 3 to 4, add PAGE_FROM and PAGE_TO column to QUICK_SEARCH
                 db.execSQL("CREATE TABLE " + "\"QUICK_SEARCH2\" (" +
-                    "\"_id\" INTEGER PRIMARY KEY ," +
-                    "\"NAME\" TEXT," +
-                    "\"MODE\" INTEGER NOT NULL ," +
-                    "\"CATEGORY\" INTEGER NOT NULL ," +
-                    "\"KEYWORD\" TEXT," +
-                    "\"ADVANCE_SEARCH\" INTEGER NOT NULL ," +
-                    "\"MIN_RATING\" INTEGER NOT NULL ," +
-                    "\"PAGE_FROM\" INTEGER NOT NULL ," +
-                    "\"PAGE_TO\" INTEGER NOT NULL ," +
-                    "\"TIME\" INTEGER NOT NULL );");
+                        "\"_id\" INTEGER PRIMARY KEY ," +
+                        "\"NAME\" TEXT," +
+                        "\"MODE\" INTEGER NOT NULL ," +
+                        "\"CATEGORY\" INTEGER NOT NULL ," +
+                        "\"KEYWORD\" TEXT," +
+                        "\"ADVANCE_SEARCH\" INTEGER NOT NULL ," +
+                        "\"MIN_RATING\" INTEGER NOT NULL ," +
+                        "\"PAGE_FROM\" INTEGER NOT NULL ," +
+                        "\"PAGE_TO\" INTEGER NOT NULL ," +
+                        "\"TIME\" INTEGER NOT NULL );");
                 db.execSQL("INSERT INTO \"QUICK_SEARCH2\" (" +
-                    "_id, NAME, MODE, CATEGORY, KEYWORD, ADVANCE_SEARCH, MIN_RATING, PAGE_FROM, PAGE_TO, TIME)" +
-                    "SELECT _id, NAME, MODE, CATEGORY, KEYWORD, ADVANCE_SEARCH, MIN_RATING, -1, -1, TIME FROM QUICK_SEARCH;");
+                        "_id, NAME, MODE, CATEGORY, KEYWORD, ADVANCE_SEARCH, MIN_RATING, PAGE_FROM, PAGE_TO, TIME)" +
+                        "SELECT _id, NAME, MODE, CATEGORY, KEYWORD, ADVANCE_SEARCH, MIN_RATING, -1, -1, TIME FROM QUICK_SEARCH;");
                 db.execSQL("DROP TABLE QUICK_SEARCH");
                 db.execSQL("ALTER TABLE QUICK_SEARCH2 RENAME TO QUICK_SEARCH");
-            case 4 :
+            case 4:
                 db.execSQL("DROP TABLE IF EXISTS \"Black_List\"");
                 db.execSQL("CREATE TABLE " + "\"Black_List\" (" + //
                         "\"_id\" INTEGER PRIMARY KEY AUTOINCREMENT ," + // 0: id
@@ -192,6 +201,7 @@ public class EhDB {
         DaoMaster daoMaster = new DaoMaster(db);
 
         sDaoSession = daoMaster.newSession();
+        MAX_HISTORY_COUNT = Settings.getHistoryInfoSize();
     }
 
     public static boolean needMerge() {
@@ -240,9 +250,8 @@ public class EhDB {
                 }
                 cursor.close();
             }
-        } catch (Throwable e) {
-            ExceptionUtils.throwIfFatal(e);
-            // Ignore
+        } catch (Throwable i) {
+            ExceptionUtils.throwIfFatal(i);
         }
 
         // Merge local favorites
@@ -397,7 +406,7 @@ public class EhDB {
         DownloadsDao dao = sDaoSession.getDownloadsDao();
         List<DownloadInfo> list = dao.queryBuilder().orderDesc(DownloadsDao.Properties.Time).list();
         // Fix state
-        for (DownloadInfo info: list) {
+        for (DownloadInfo info : list) {
             if (info.state == DownloadInfo.STATE_WAIT || info.state == DownloadInfo.STATE_DOWNLOAD) {
                 info.state = DownloadInfo.STATE_NONE;
             }
@@ -454,6 +463,21 @@ public class EhDB {
         dao.deleteByKey(gid);
     }
 
+    public static synchronized void updateDownloadDirname(long removeGid, long newGid, String dirname) {
+        DownloadDirnameDao dao = sDaoSession.getDownloadDirnameDao();
+        dao.deleteByKey(removeGid);
+        DownloadDirname raw = dao.load(newGid);
+        if (raw != null) { // Update
+            raw.setDirname(dirname);
+            dao.update(raw);
+        } else { // Insert
+            raw = new DownloadDirname();
+            raw.setGid(newGid);
+            raw.setDirname(dirname);
+            dao.insert(raw);
+        }
+    }
+
     public static synchronized void clearDownloadDirname() {
         DownloadDirnameDao dao = sDaoSession.getDownloadDirnameDao();
         dao.deleteAll();
@@ -467,6 +491,13 @@ public class EhDB {
 
     public static synchronized DownloadLabel addDownloadLabel(String label) {
         DownloadLabelDao dao = sDaoSession.getDownloadLabelDao();
+
+        QueryBuilder<DownloadLabel> queryBuilder = dao.queryBuilder().where(DownloadLabelDao.Properties.Label.eq(label));
+        List<DownloadLabel> result = queryBuilder.list();
+        if (!result.isEmpty()) {
+            return result.get(0);
+        }
+
         DownloadLabel raw = new DownloadLabel();
         raw.setLabel(label);
         raw.setTime(System.currentTimeMillis());
@@ -478,6 +509,10 @@ public class EhDB {
         // Reset id
         raw.setId(null);
         DownloadLabelDao dao = sDaoSession.getDownloadLabelDao();
+        DownloadLabel label = dao.load(raw.getId());
+        if (label != null) {
+            return label;
+        }
         raw.setId(dao.insert(raw));
         return raw;
     }
@@ -526,13 +561,11 @@ public class EhDB {
     }
 
     public static synchronized List<GalleryInfo> searchLocalFavorites(String query) {
-        query = SqlUtils.sqlEscapeString("%" + query+ "%");
+        query = SqlUtils.sqlEscapeString("%" + query + "%");
         LocalFavoritesDao dao = sDaoSession.getLocalFavoritesDao();
         List<LocalFavoriteInfo> list = dao.queryBuilder().orderDesc(LocalFavoritesDao.Properties.Time)
                 .where(LocalFavoritesDao.Properties.Title.like(query)).list();
-        List<GalleryInfo> result = new ArrayList<>();
-        result.addAll(list);
-        return result;
+        return new ArrayList<>(list);
     }
 
     public static synchronized GalleryInfo searchLocalFavorites(long query) {
@@ -540,8 +573,7 @@ public class EhDB {
         LocalFavoritesDao dao = sDaoSession.getLocalFavoritesDao();
         List<LocalFavoriteInfo> list = dao.queryBuilder().orderDesc(LocalFavoritesDao.Properties.Time)
                 .where(LocalFavoritesDao.Properties.Gid.eq(query)).list();
-        GalleryInfo result = list.get(0);
-        return result;
+        return list.get(0);
     }
 
     public static synchronized void removeLocalFavorites(long gid) {
@@ -550,7 +582,7 @@ public class EhDB {
 
     public static synchronized void removeLocalFavorites(long[] gidArray) {
         LocalFavoritesDao dao = sDaoSession.getLocalFavoritesDao();
-        for (long gid: gidArray) {
+        for (long gid : gidArray) {
             dao.deleteByKey(gid);
         }
     }
@@ -560,7 +592,7 @@ public class EhDB {
         return null != dao.load(gid);
     }
 
-    public static synchronized void putLocalFavorites(GalleryInfo galleryInfo) {
+    public static synchronized void putLocalFavorite(GalleryInfo galleryInfo) {
         LocalFavoritesDao dao = sDaoSession.getLocalFavoritesDao();
         if (null == dao.load(galleryInfo.gid)) {
             LocalFavoriteInfo info;
@@ -575,74 +607,74 @@ public class EhDB {
     }
 
     public static synchronized void putLocalFavorites(List<GalleryInfo> galleryInfoList) {
-        for (GalleryInfo gi: galleryInfoList) {
-            putLocalFavorites(gi);
+        for (GalleryInfo gi : galleryInfoList) {
+            putLocalFavorite(gi);
         }
     }
 
 
-    public static synchronized List<BlackList> getAllBlackList(){
+    public static synchronized List<BlackList> getAllBlackList() {
         BlackListDao dao = sDaoSession.getBlackListDao();
         return dao.queryBuilder().orderAsc(BlackListDao.Properties.Add_time).list();
     }
 
-    public static synchronized boolean inBlackList(String Badgayname){
+    public static synchronized boolean inBlackList(String Badgayname) {
         BlackListDao dao = sDaoSession.getBlackListDao();
         return dao.queryRaw("where Badgayname ='" + Badgayname + "'").size() != 0;
     }
 
-    public static synchronized void insertBlackList(BlackList blackList){
+    public static synchronized void insertBlackList(BlackList blackList) {
         BlackListDao dao = sDaoSession.getBlackListDao();
         blackList.id = null;
-        if (blackList.badgayname == null){
+        if (blackList.badgayname == null) {
             return;
         }
         dao.insert(blackList);
     }
 
-    public static synchronized void updateBlackList(BlackList blackList){
+    public static synchronized void updateBlackList(BlackList blackList) {
         BlackListDao dao = sDaoSession.getBlackListDao();
         dao.update(blackList);
     }
 
-    public static synchronized void deleteBlackList(BlackList blackList){
+    public static synchronized void deleteBlackList(BlackList blackList) {
         BlackListDao dao = sDaoSession.getBlackListDao();
         dao.delete(blackList);
     }
 
-    public static synchronized List<GalleryTags> getAllGalleryTags(){
+    public static synchronized List<GalleryTags> getAllGalleryTags() {
         GalleryTagsDao dao = sDaoSession.getGalleryTagsDao();
         return dao.queryBuilder().orderAsc(GalleryTagsDao.Properties.Gid).list();
     }
 
-    public static synchronized boolean inGalleryTags(long gid){
+    public static synchronized boolean inGalleryTags(long gid) {
         GalleryTagsDao dao = sDaoSession.getGalleryTagsDao();
-        return dao.queryRaw("where gid =" + gid ).size() != 0;
+        return dao.queryRaw("where gid =" + gid).size() != 0;
     }
 
-    public static synchronized GalleryTags queryGalleryTags(long gid){
+    public static synchronized GalleryTags queryGalleryTags(long gid) {
         GalleryTagsDao dao = sDaoSession.getGalleryTagsDao();
-        List<GalleryTags> list = dao.queryRaw("where gid =" + gid );
-        if (list.isEmpty()){
+        List<GalleryTags> list = dao.queryRaw("where gid =" + gid);
+        if (list.isEmpty()) {
             return null;
         }
         return list.get(0);
     }
 
-    public static synchronized void insertGalleryTags(GalleryTags galleryTags){
+    public static synchronized void insertGalleryTags(GalleryTags galleryTags) {
         GalleryTagsDao dao = sDaoSession.getGalleryTagsDao();
         galleryTags.create_time = new Date();
         galleryTags.update_time = galleryTags.create_time;
         dao.insert(galleryTags);
     }
 
-    public static synchronized void updateGalleryTags(GalleryTags galleryTags){
+    public static synchronized void updateGalleryTags(GalleryTags galleryTags) {
         GalleryTagsDao dao = sDaoSession.getGalleryTagsDao();
         galleryTags.update_time = new Date();
         dao.update(galleryTags);
     }
 
-    public static synchronized void deleteGalleryTags(GalleryTags galleryTags){
+    public static synchronized void deleteGalleryTags(GalleryTags galleryTags) {
         GalleryTagsDao dao = sDaoSession.getGalleryTagsDao();
         dao.delete(galleryTags);
     }
@@ -655,8 +687,41 @@ public class EhDB {
     public static synchronized void insertQuickSearch(QuickSearch quickSearch) {
         QuickSearchDao dao = sDaoSession.getQuickSearchDao();
         quickSearch.id = null;
-        quickSearch.time = System.currentTimeMillis();
+        if (quickSearch.time==0L){
+            quickSearch.time = System.currentTimeMillis();
+        }
         quickSearch.id = dao.insert(quickSearch);
+    }
+
+    public static synchronized void insertQuickSearchList(List<QuickSearch> quickSearchList) {
+        QuickSearchDao dao = sDaoSession.getQuickSearchDao();
+        for (int i = 0; i < quickSearchList.size(); i++) {
+            QuickSearch search = quickSearchList.get(i);
+            search.id = null;
+            search.time = System.currentTimeMillis();
+            search.id = dao.insert(search);
+        }
+    }
+
+    public static synchronized void takeOverQuickSearchList(List<QuickSearch> quickSearchList) {
+        QuickSearchDao dao = sDaoSession.getQuickSearchDao();
+        List<QuickSearch> allList = dao.queryBuilder().orderAsc(QuickSearchDao.Properties.Time).list();
+        for (int i = 0; i < quickSearchList.size(); i++) {
+            QuickSearch newSearch = quickSearchList.get(i);
+            boolean insert = true;
+            for (int j = 0; j < allList.size(); j++) {
+                QuickSearch exist = allList.get(j);
+                if (exist.keyword.equals(newSearch.keyword)) {
+                    insert = false;
+                    break;
+                }
+            }
+            if (insert) {
+                newSearch.id = null;
+                newSearch.time = System.currentTimeMillis();
+                newSearch.id = dao.insert(newSearch);
+            }
+        }
     }
 
     public static synchronized void updateQuickSearch(QuickSearch quickSearch) {
@@ -710,15 +775,21 @@ public class EhDB {
             info = new HistoryInfo(galleryInfo);
             info.time = System.currentTimeMillis();
             dao.insert(info);
-            List<HistoryInfo> list = dao.queryBuilder().orderDesc(HistoryDao.Properties.Time)
-                    .limit(-1).offset(MAX_HISTORY_COUNT).list();
+            List<HistoryInfo> list;
+            if (MAX_HISTORY_COUNT < 1) {
+                list = dao.queryBuilder().orderDesc(HistoryDao.Properties.Time)
+                        .limit(-1).offset(100).list();
+            } else {
+                list = dao.queryBuilder().orderDesc(HistoryDao.Properties.Time)
+                        .limit(-1).offset(MAX_HISTORY_COUNT).list();
+            }
             dao.deleteInTx(list);
         }
     }
 
     public static synchronized void putHistoryInfo(List<HistoryInfo> historyInfoList) {
         HistoryDao dao = sDaoSession.getHistoryDao();
-        for (HistoryInfo info: historyInfoList) {
+        for (HistoryInfo info : historyInfoList) {
             if (null == dao.load(info.gid)) {
                 dao.insert(info);
             }
@@ -781,14 +852,22 @@ public class EhDB {
             try (SQLiteDatabase db = helper.getWritableDatabase()) {
                 DaoMaster daoMaster = new DaoMaster(db);
                 DaoSession exportSession = daoMaster.newSession();
-                if (!copyDao(sDaoSession.getDownloadsDao(), exportSession.getDownloadsDao())) return false;
-                if (!copyDao(sDaoSession.getDownloadLabelDao(), exportSession.getDownloadLabelDao())) return false;
-                if (!copyDao(sDaoSession.getDownloadDirnameDao(), exportSession.getDownloadDirnameDao())) return false;
-                if (!copyDao(sDaoSession.getHistoryDao(), exportSession.getHistoryDao())) return false;
-                if (!copyDao(sDaoSession.getQuickSearchDao(), exportSession.getQuickSearchDao())) return false;
-                if (!copyDao(sDaoSession.getLocalFavoritesDao(), exportSession.getLocalFavoritesDao())) return false;
-                if (!copyDao(sDaoSession.getBookmarksBao(), exportSession.getBookmarksBao())) return false;
-                if (!copyDao(sDaoSession.getFilterDao(), exportSession.getFilterDao())) return false;
+                if (!copyDao(sDaoSession.getDownloadsDao(), exportSession.getDownloadsDao()))
+                    return false;
+                if (!copyDao(sDaoSession.getDownloadLabelDao(), exportSession.getDownloadLabelDao()))
+                    return false;
+                if (!copyDao(sDaoSession.getDownloadDirnameDao(), exportSession.getDownloadDirnameDao()))
+                    return false;
+                if (!copyDao(sDaoSession.getHistoryDao(), exportSession.getHistoryDao()))
+                    return false;
+                if (!copyDao(sDaoSession.getQuickSearchDao(), exportSession.getQuickSearchDao()))
+                    return false;
+                if (!copyDao(sDaoSession.getLocalFavoritesDao(), exportSession.getLocalFavoritesDao()))
+                    return false;
+                if (!copyDao(sDaoSession.getBookmarksBao(), exportSession.getBookmarksBao()))
+                    return false;
+                if (!copyDao(sDaoSession.getFilterDao(), exportSession.getFilterDao()))
+                    return false;
             }
 
             // Copy export db to data dir
@@ -821,7 +900,7 @@ public class EhDB {
      * @param file The db file
      * @return error string, null for no error
      */
-    public static synchronized String importDB(Context context, File file) {
+    public static synchronized String importDB(Context context, File file, Handler handler) {
         try {
             SQLiteDatabase db = SQLiteDatabase.openDatabase(
                     file.getPath(), null, SQLiteDatabase.NO_LOCALIZED_COLLATORS);
@@ -836,21 +915,22 @@ public class EhDB {
 
             DaoMaster daoMaster = new DaoMaster(db);
             DaoSession session = daoMaster.newSession();
-
-            // Downloads
+            sendImportProgress(handler, 10);
             DownloadManager manager = EhApplication.getDownloadManager(context);
-            List<DownloadInfo> downloadInfoList = session.getDownloadsDao().queryBuilder().list();
-            manager.addDownload(downloadInfoList);
-
             // Download label
             List<DownloadLabel> downloadLabelList = session.getDownloadLabelDao().queryBuilder().list();
             manager.addDownloadLabel(downloadLabelList);
+            // Downloads
+            List<DownloadInfo> downloadInfoList = session.getDownloadsDao().queryBuilder().list();
+            manager.addDownload(downloadInfoList);
 
+            sendImportProgress(handler, 50);
             // Download dirname
             List<DownloadDirname> downloadDirnameList = session.getDownloadDirnameDao().queryBuilder().list();
-            for (DownloadDirname dirname: downloadDirnameList) {
+            for (DownloadDirname dirname : downloadDirnameList) {
                 putDownloadDirname(dirname.getGid(), dirname.getDirname());
             }
+            sendImportProgress(handler, 90);
 
             // History
             List<HistoryInfo> historyInfoList = session.getHistoryDao().queryBuilder().list();
@@ -859,9 +939,9 @@ public class EhDB {
             // QuickSearch
             List<QuickSearch> quickSearchList = session.getQuickSearchDao().queryBuilder().list();
             List<QuickSearch> currentQuickSearchList = sDaoSession.getQuickSearchDao().queryBuilder().list();
-            for (QuickSearch quickSearch: quickSearchList) {
+            for (QuickSearch quickSearch : quickSearchList) {
                 String name = quickSearch.name;
-                for (QuickSearch q: currentQuickSearchList) {
+                for (QuickSearch q : currentQuickSearchList) {
                     if (ObjectUtils.equal(q.name, name)) {
                         // The same name
                         name = null;
@@ -876,8 +956,8 @@ public class EhDB {
 
             // LocalFavorites
             List<LocalFavoriteInfo> localFavoriteInfoList = session.getLocalFavoritesDao().queryBuilder().list();
-            for (LocalFavoriteInfo info: localFavoriteInfoList) {
-                putLocalFavorites(info);
+            for (LocalFavoriteInfo info : localFavoriteInfoList) {
+                putLocalFavorite(info);
             }
 
             // Bookmarks
@@ -886,7 +966,7 @@ public class EhDB {
             // Filter
             List<Filter> filterList = session.getFilterDao().queryBuilder().list();
             List<Filter> currentFilterList = sDaoSession.getFilterDao().queryBuilder().list();
-            for (Filter filter: filterList) {
+            for (Filter filter : filterList) {
                 if (!currentFilterList.contains(filter)) {
                     addFilter(filter);
                 }
@@ -894,7 +974,7 @@ public class EhDB {
 
             List<BlackList> blackList = session.getBlackListDao().queryBuilder().list();
             List<BlackList> currentBlackList = sDaoSession.getBlackListDao().queryBuilder().list();
-            for (BlackList black: blackList) {
+            for (BlackList black : blackList) {
                 if (!currentBlackList.contains(black)) {
                     insertBlackList(black);
                 }
@@ -902,7 +982,7 @@ public class EhDB {
 
             List<GalleryTags> galleryTagsList = session.getGalleryTagsDao().queryBuilder().list();
             List<GalleryTags> currentGalleryTags = sDaoSession.getGalleryTagsDao().queryBuilder().list();
-            for (GalleryTags tags: galleryTagsList) {
+            for (GalleryTags tags : galleryTagsList) {
                 if (!currentGalleryTags.contains(tags)) {
                     insertGalleryTags(tags);
                 }
@@ -914,5 +994,14 @@ public class EhDB {
             // Ignore
             return context.getString(R.string.cant_read_the_file);
         }
+    }
+
+    private static void sendImportProgress(Handler handler, int progress) {
+        Message message = new Message();
+        Bundle bundle = new Bundle();
+        bundle.putInt(LOADING_PROGRESS, progress);
+        bundle.putInt(LOADING_STATUS, DB_LOADING);
+        message.setData(bundle);
+        handler.sendMessage(message);
     }
 }

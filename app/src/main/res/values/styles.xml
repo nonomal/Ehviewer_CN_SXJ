@@ -66,6 +66,18 @@
         <item name="android:gravity">start</item>
     </style>
 
+    <style name="GotoMessageStyle">
+        <item name="android:textAppearance">@style/TextAppearance.GotoMessageStyle</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">10</item>
+        <item name="android:gravity">start</item>
+    </style>
+
+    <style name="TextAppearance.GotoMessageStyle">
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:textColor">?android:attr/textColorTertiary</item>
+    </style>
+
     <style name="TextAppearance.TopListItem">
         <item name="android:textSize">@dimen/text_medium</item>
         <item name="android:textColor">?android:attr/textColorSecondary</item>
@@ -90,6 +102,18 @@
 
     <style name="CardMessage">
         <item name="android:textAppearance">@style/TextAppearance.CardMessage</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <style name="TextAppearance.ReadProgress">
+        <item name="android:textSize">@dimen/text_small</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
+    </style>
+
+    <style name="ReadProgress">
+        <item name="android:textAppearance">@style/TextAppearance.ReadProgress</item>
         <item name="android:ellipsize">end</item>
         <item name="android:singleLine">true</item>
         <item name="android:maxLines">1</item>
@@ -124,6 +148,18 @@
         <item name="android:minWidth">88dp</item>
         <item name="android:padding">8dp</item>
         <item name="android:textColor">?attr/colorPrimary</item>
+    </style>
+
+    <style name="ButtonNewVersion">
+        <item name="android:textAppearance">@style/TextAppearance.AppCompat.Button</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:gravity">center</item>
+        <item name="android:minHeight">0dp</item>
+        <item name="android:minWidth">88dp</item>
+        <item name="android:paddingLeft">16dp</item>
+        <item name="android:paddingRight">16dp</item>
+        <item name="android:paddingTop">4dp</item>
+        <item name="android:paddingBottom">4dp</item>
     </style>
 
     <style name="ButtonInCard.Accent">
@@ -215,6 +251,20 @@
     <style name="PopupWindow">
         <item name="android:windowEnterAnimation">@anim/pop_enter</item>
         <item name="android:windowExitAnimation">@anim/pop_exit</item>
+    </style>
+
+    <style name="Widget.AppTheme.ButtonBar.Fullscreen" parent="">
+        <item name="android:background">@color/black_overlay</item>
+        <item name="android:buttonBarStyle">?android:attr/buttonBarStyle</item>
+    </style>
+    <style name="Widget.Ehviewer.AppWidget.Container" parent="android:Widget">
+        <item name="android:id">@android:id/background</item>
+        <item name="android:background">?android:attr/colorBackground</item>
+    </style>
+
+    <style name="Widget.Ehviewer.AppWidget.InnerView" parent="android:Widget">
+        <item name="android:background">?android:attr/colorBackground</item>
+        <item name="android:textColor">?android:attr/textColorPrimary</item>
     </style>
 
 

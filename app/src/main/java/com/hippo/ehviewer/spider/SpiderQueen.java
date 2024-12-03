@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer.spider;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
@@ -47,24 +48,26 @@ import com.hippo.ehviewer.client.parser.GalleryPageApiParser;
 import com.hippo.ehviewer.client.parser.GalleryPageParser;
 import com.hippo.ehviewer.client.parser.GalleryPageUrlParser;
 import com.hippo.ehviewer.gallery.GalleryProvider2;
-import com.hippo.glgallery.GalleryPageView;
-import com.hippo.glgallery.GalleryProvider;
-import com.hippo.image.Image;
+import com.hippo.lib.glgallery.GalleryPageView;
+import com.hippo.lib.glgallery.GalleryProvider;
+import com.hippo.lib.image.Image;
 import com.hippo.streampipe.InputStreamPipe;
 import com.hippo.streampipe.OutputStreamPipe;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.util.IoThreadPoolExecutor;
-import com.hippo.yorozuya.IOUtils;
-import com.hippo.yorozuya.MathUtils;
-import com.hippo.yorozuya.OSUtils;
-import com.hippo.yorozuya.StringUtils;
-import com.hippo.yorozuya.Utilities;
-import com.hippo.yorozuya.collect.SparseJLArray;
-import com.hippo.yorozuya.thread.PriorityThread;
-import com.hippo.yorozuya.thread.PriorityThreadFactory;
+import com.hippo.lib.yorozuya.IOUtils;
+import com.hippo.lib.yorozuya.MathUtils;
+import com.hippo.lib.yorozuya.OSUtils;
+import com.hippo.lib.yorozuya.StringUtils;
+import com.hippo.lib.yorozuya.Utilities;
+import com.hippo.lib.yorozuya.collect.SparseJLArray;
+import com.hippo.lib.yorozuya.thread.PriorityThread;
+import com.hippo.lib.yorozuya.thread.PriorityThreadFactory;
+import com.google.firebase.crashlytics.FirebaseCrashlytics;
 
 import java.io.BufferedInputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -74,6 +77,8 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -99,6 +104,8 @@ public final class SpiderQueen implements Runnable {
     public static final int STATE_FAILED = 3;
     public static final int DECODE_THREAD_NUM = 2;
     public static final String SPIDER_INFO_FILENAME = ".ehviewer";
+
+    public static final String SPIDER_INFO_BACKUP_DIR = "backupDir";
     private static final String TAG = SpiderQueen.class.getSimpleName();
     private static final AtomicInteger sIdGenerator = new AtomicInteger();
     private static final boolean DEBUG_LOG = false;
@@ -110,6 +117,8 @@ public final class SpiderQueen implements Runnable {
     private static final SparseJLArray<SpiderQueen> sQueenMap = new SparseJLArray<>();
     @NonNull
     private final OkHttpClient mHttpClient;
+    @NonNull
+    private final OkHttpClient mHttpImageClient;
     @NonNull
     private final SimpleDiskCache mSpiderInfoCache;
     @NonNull
@@ -152,10 +161,15 @@ public final class SpiderQueen implements Runnable {
     private volatile int[] mPageStateArray;
     // For download, when it go to mPageStateArray.size(), done
     private volatile int mDownloadPage = -1;
-    private AtomicReference<String> showKey = new AtomicReference<>();
+    private final AtomicReference<String> showKey = new AtomicReference<>();
+
+    private final int downloadTimeout;
+
+    private long receiveBytesBefore;
 
     private SpiderQueen(EhApplication application, @NonNull GalleryInfo galleryInfo) {
         mHttpClient = EhApplication.getOkHttpClient(application);
+        mHttpImageClient = EhApplication.getImageOkHttpClient(application);
         mSpiderInfoCache = EhApplication.getSpiderInfoCache(application);
         mGalleryInfo = galleryInfo;
         mSpiderDen = new SpiderDen(mGalleryInfo);
@@ -171,6 +185,7 @@ public final class SpiderQueen implements Runnable {
                 0, TimeUnit.SECONDS, new LinkedBlockingDeque<>(),
                 new PriorityThreadFactory(SpiderWorker.class.getSimpleName(), Process.THREAD_PRIORITY_BACKGROUND));
         mDownloadDelay = Settings.getDownloadDelay();
+        downloadTimeout = Settings.getDownloadTimeout();
     }
 
     @UiThread
@@ -191,6 +206,33 @@ public final class SpiderQueen implements Runnable {
             queen.setMode(mode);
         }
         return queen;
+    }
+
+    @UiThread
+    public static int findStartPage(@NonNull Context context, @NonNull GalleryInfo galleryInfo) {
+        SpiderInfo spiderInfo = null;
+        SimpleDiskCache msic;
+        EhApplication application = (EhApplication) context.getApplicationContext();
+        msic = EhApplication.getSpiderInfoCache(application);
+        InputStreamPipe pipe = msic.getInputStreamPipe(Long.toString(galleryInfo.gid));
+        if (null != pipe) {
+            try {
+                pipe.obtain();
+                spiderInfo = SpiderInfo.read(pipe.open());
+            } catch (IOException ignore) {
+                // Ignore
+//                Crashes.trackError(ignore);
+            } finally {
+                pipe.close();
+                pipe.release();
+            }
+        }
+
+        int startPage = 0;
+        if (spiderInfo != null) {
+            startPage = spiderInfo.startPage;
+        }
+        return startPage;
     }
 
     @UiThread
@@ -557,8 +599,13 @@ public final class SpiderQueen implements Runnable {
                 return;
             }
 
-            for (; mWorkerCount < mWorkerMaxCount; mWorkerCount++) {
-                mWorkerPoolExecutor.execute(new SpiderWorker());
+            try {
+                for (; mWorkerCount < mWorkerMaxCount; mWorkerCount++) {
+                    mWorkerPoolExecutor.execute(new SpiderWorker());
+                }
+            } catch (OutOfMemoryError outOfMemoryError) {
+                FirebaseCrashlytics.getInstance().recordException(outOfMemoryError);
+                notifyFinish();
             }
         }
     }
@@ -629,7 +676,6 @@ public final class SpiderQueen implements Runnable {
         }
     }
 
-
     @Nullable
     public String getExtension(int index) {
         int state = getPageState(index);
@@ -672,6 +718,7 @@ public final class SpiderQueen implements Runnable {
         }
     }
 
+    @SuppressLint("StaticFieldLeak")
     public void putStartPage(int page) {
         final SpiderInfo spiderInfo = mSpiderInfo.get();
         if (spiderInfo != null) {
@@ -764,6 +811,7 @@ public final class SpiderQueen implements Runnable {
             return spiderInfo;
         } catch (Throwable e) {
             ExceptionUtils.throwIfFatal(e);
+            FirebaseCrashlytics.getInstance().recordException(e);
             return null;
         }
     }
@@ -1082,6 +1130,9 @@ public final class SpiderQueen implements Runnable {
     }
 
     private class SpiderWorker implements Runnable {
+        private Timer downloadSpeedZeroTimeCount;
+
+        private boolean cancelDownload = false;
 
         private final long mGid;
 
@@ -1193,7 +1244,6 @@ public final class SpiderQueen implements Runnable {
                         }
                     }
                 }
-
                 if (imageUrl == null) {
                     if (localShowKey == null) {
                         error = "ShowKey error";
@@ -1202,7 +1252,11 @@ public final class SpiderQueen implements Runnable {
 
                     try {
                         GalleryPageApiParser.Result result = fetchPageResultFromApi(gid, index, pToken, localShowKey, previousPToken);
-                        imageUrl = result.imageUrl;
+                        if (result.imageUrl != null) {
+                            imageUrl = result.imageUrl;
+                        } else {
+                            imageUrl = result.otherImageUrl;
+                        }
                         skipHathKey = result.skipHathKey;
                         originImageUrl = result.originImageUrl;
                     } catch (Image509Exception e) {
@@ -1230,15 +1284,40 @@ public final class SpiderQueen implements Runnable {
 
                 String targetImageUrl;
                 String referer;
+                referer = EhUrl.getPageUrl(gid, index, pToken);
                 if (Settings.getDownloadOriginImage() && !TextUtils.isEmpty(originImageUrl)) {
                     targetImageUrl = originImageUrl;
-                    referer = EhUrl.getPageUrl(gid, index, pToken);
+//                    String refNew;
+//                    if (targetImageUrl.contains("?")) {
+//                        refNew = referer + "&nl=" + skipHathKey;
+//                    } else {
+//                        refNew = referer + "?nl=" + skipHathKey;
+//                    }
+                    if (targetImageUrl.contains("?")) {
+                        targetImageUrl = targetImageUrl + "&nl=" + skipHathKey;
+                    } else {
+                        targetImageUrl = targetImageUrl + "?nl=" + skipHathKey;
+                    }
+
+                    Call call = mHttpImageClient.newBuilder()
+                            .callTimeout(30, TimeUnit.SECONDS).build()
+                            .newCall(new EhRequestBuilder(targetImageUrl, referer).build());
+                    Response response;
+                    try {
+                        response = call.execute();
+                        targetImageUrl = response.header("location");
+                    } catch (IOException e) {
+                        error = "GP不足/Insufficient GP";
+                        IOException ioException = new IOException("原图链接获取失败", e);
+                        FirebaseCrashlytics.getInstance().recordException(ioException);
+                        break;
+                    }
                 } else {
                     targetImageUrl = imageUrl;
-                    referer = null;
                 }
+
                 if (targetImageUrl == null) {
-                    error = "TargetImageUrl error";
+                    error = "GP不足/Insufficient GP";
                     break;
                 }
                 if (DEBUG_LOG) {
@@ -1248,16 +1327,31 @@ public final class SpiderQueen implements Runnable {
                 // Download image
                 InputStream is = null;
                 try {
+
                     if (DEBUG_LOG) {
                         Log.d(TAG, "Start download image " + index);
                     }
 
                     // disable Call Timeout for image-downloading requests
                     Call call = mHttpClient.newBuilder()
-                            .callTimeout(0, TimeUnit.SECONDS).build()
+                            .callTimeout(downloadTimeout, TimeUnit.SECONDS).build()
                             .newCall(new EhRequestBuilder(targetImageUrl, referer).build());
                     Response response = call.execute();
                     ResponseBody responseBody = response.body();
+
+                    String responseUrl = null;
+                    if (response.networkResponse() != null) {
+                        responseUrl = response.networkResponse().request().url().toString();
+                    } else if (response.cacheResponse() != null) {
+                        responseUrl = response.cacheResponse().request().url().toString();
+                    }
+                    // 反劫持校验
+                    if (!targetImageUrl.equals(responseUrl)) {
+                        error = "链接疑似被劫持\nThe link is suspected to be hijacked";
+                        response.close();
+                        forceHtml = true;
+                        continue;
+                    }
 
                     if (response.code() >= 400) {
                         // Maybe 404
@@ -1278,6 +1372,9 @@ public final class SpiderQueen implements Runnable {
                     MediaType mediaType = responseBody.contentType();
                     if (mediaType != null) {
                         extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mediaType.toString());
+                        if (extension != null&&!extension.contains(".")){
+                            extension= "."+extension;
+                        }
                     }
                     // Ensure extension
                     if (!Utilities.contain(GalleryProvider2.SUPPORT_IMAGE_EXTENSIONS, extension)) {
@@ -1314,6 +1411,25 @@ public final class SpiderQueen implements Runnable {
                             // Update page percent
                             if (contentLength > 0) {
                                 mPagePercentMap.put(index, (float) receivedSize / contentLength);
+                            }
+                            if (receivedSize == receiveBytesBefore) {
+                                if (downloadSpeedZeroTimeCount == null) {
+                                    try {
+                                        downloadSpeedZeroTimeCount = new Timer();
+                                        cancelDownload = false;
+                                        downloadSpeedZeroTimeCount.schedule(new TimeCount(), 3000);
+                                    } catch (Throwable e) {
+                                        FirebaseCrashlytics.getInstance().recordException(e);
+                                    }
+                                }
+                                if (cancelDownload) {
+                                    cancelTimeCount();
+                                    response.close();
+                                    break;
+                                }
+                            } else {
+                                cancelTimeCount();
+                                receiveBytesBefore = receivedSize;
                             }
                             // Notify listener
                             notifyPageDownload(index, contentLength, receivedSize, bytesRead);
@@ -1416,6 +1532,9 @@ public final class SpiderQueen implements Runnable {
         // false for stop
         private boolean runInternal() {
             SpiderInfo spiderInfo = mSpiderInfo.get();
+            UniFile downloadDir = mSpiderDen.getDownloadDir();
+            SpiderInfo oldInfo;
+
             if (spiderInfo == null) {
                 return false;
             }
@@ -1555,6 +1674,14 @@ public final class SpiderQueen implements Runnable {
             return downloadImage(mGid, index, pToken, previousPToken, force);
         }
 
+        private void cancelTimeCount() {
+            if (downloadSpeedZeroTimeCount != null) {
+                downloadSpeedZeroTimeCount.cancel();
+                downloadSpeedZeroTimeCount = null;
+            }
+            cancelDownload = false;
+        }
+
         @Override
         @SuppressWarnings("StatementWithEmptyBody")
         public void run() {
@@ -1579,10 +1706,22 @@ public final class SpiderQueen implements Runnable {
             if (finish) {
                 notifyFinish();
             }
-
+            cancelTimeCount();
             if (DEBUG_LOG) {
                 Log.i(TAG, Thread.currentThread().getName() + ": end");
             }
+        }
+
+        private class TimeCount extends TimerTask {
+            public TimeCount() {
+
+            }
+
+            @Override
+            public void run() {
+                cancelDownload = true;
+            }
+
         }
     }
 
@@ -1645,7 +1784,7 @@ public final class SpiderQueen implements Runnable {
 
                 pipe.obtain();
                 try {
-                    is = new AutoCloseInputStream(pipe, pipe.open());
+                    is = pipe.open();
                 } catch (IOException e) {
                     // Can't open pipe
                     error = GetText.getString(R.string.error_reading_failed);
@@ -1655,7 +1794,18 @@ public final class SpiderQueen implements Runnable {
                 }
 
                 if (is != null) {
-                    image = Image.decode(is, true);
+                    try {
+                        image = Image.decode((FileInputStream) is, false);
+                    }catch (OutOfMemoryError e){
+                        FirebaseCrashlytics.getInstance().recordException(e);
+                    }finally {
+                        try {
+                            is.close();
+                        } catch (IOException e) {
+                            Log.e(TAG, "解码失败", e);
+                            FirebaseCrashlytics.getInstance().recordException(e);
+                        }
+                    }
                     if (image == null) {
                         error = GetText.getString(R.string.error_decoding_failed);
                     }

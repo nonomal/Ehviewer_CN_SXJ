@@ -18,9 +18,16 @@ package com.hippo.ehviewer.client.data;
 
 import android.os.Parcel;
 import android.os.Parcelable;
+
 import androidx.annotation.Nullable;
 
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
+import com.hippo.ehviewer.dao.DownloadInfo;
+
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.regex.Pattern;
 
 public class GalleryInfo implements Parcelable {
@@ -81,23 +88,23 @@ public class GalleryInfo implements Parcelable {
     };
 
     public static final String[] S_LANG_TAGS = {
-        "language:english",
-        "language:chinese",
-        "language:spanish",
-        "language:korean",
-        "language:russian",
-        "language:french",
-        "language:portuguese",
-        "language:thai",
-        "language:german",
-        "language:italian",
-        "language:vietnamese",
-        "language:polish",
-        "language:hungarian",
-        "language:dutch",
+            "language:english",
+            "language:chinese",
+            "language:spanish",
+            "language:korean",
+            "language:russian",
+            "language:french",
+            "language:portuguese",
+            "language:thai",
+            "language:german",
+            "language:italian",
+            "language:vietnamese",
+            "language:polish",
+            "language:hungarian",
+            "language:dutch",
     };
 
-    public long gid ;
+    public long gid;
     public String token;
     public String title;
     public String titleJpn;
@@ -138,6 +145,9 @@ public class GalleryInfo implements Parcelable {
     }
 
     private void generateSLangFromTags() {
+        if(simpleTags==null){
+            return;
+        }
         for (String tag : simpleTags) {
             for (int i = 0; i < S_LANGS.length; i++) {
                 if (S_LANG_TAGS[i].equals(tag)) {
@@ -187,7 +197,8 @@ public class GalleryInfo implements Parcelable {
         dest.writeList(this.tgList);
     }
 
-    public GalleryInfo() {}
+    public GalleryInfo() {
+    }
 
     protected GalleryInfo(Parcel in) {
         this.gid = in.readLong();
@@ -212,7 +223,7 @@ public class GalleryInfo implements Parcelable {
         this.tgList = in.readArrayList(String.class.getClassLoader());
     }
 
-    public static final Creator<GalleryInfo> CREATOR = new Creator<GalleryInfo>() {
+    public static final Creator<GalleryInfo> CREATOR = new Creator<>() {
 
         @Override
         public GalleryInfo createFromParcel(Parcel source) {
@@ -224,4 +235,103 @@ public class GalleryInfo implements Parcelable {
             return new GalleryInfo[size];
         }
     };
+
+    public DownloadInfo getDownloadInfo(@Nullable DownloadInfo info) {
+        DownloadInfo i = new DownloadInfo();
+        i.gid = gid;
+        i.token = token;
+        i.title = title;
+        i.titleJpn = titleJpn;
+        i.thumb = thumb;
+        i.category = category;
+        i.posted = posted;
+        i.uploader = uploader;
+        i.rating = rating;
+        i.rated = rated;
+        i.simpleLanguage = simpleLanguage;
+        i.simpleTags = simpleTags;
+        i.thumbWidth = thumbWidth;
+        i.thumbHeight = thumbHeight;
+        i.spanSize = spanSize;
+        i.spanIndex = spanIndex;
+        i.spanGroupIndex = spanGroupIndex;
+        i.favoriteSlot = favoriteSlot;
+        i.favoriteName = favoriteName;
+        i.tgList = tgList;
+        if (info != null) {
+            i.state = info.state;
+            i.legacy = info.legacy;
+            i.time = info.time;
+            i.label = info.label;
+        }
+
+        return i;
+    }
+
+    public JSONObject toJson() {
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("gid", gid);
+        jsonObject.put("token", token);
+        jsonObject.put("title", title);
+        jsonObject.put("titleJpn", titleJpn);
+        jsonObject.put("thumb", thumb);
+        jsonObject.put("category", category);
+        jsonObject.put("posted", posted);
+        jsonObject.put("uploader", uploader);
+        jsonObject.put("rating", rating);
+        jsonObject.put("rated", rated);
+        jsonObject.put("simpleLanguage", simpleLanguage);
+        if (simpleTags != null) {
+            jsonObject.put("simpleTags", simpleTags);
+        }
+        jsonObject.put("thumbHeight", thumbHeight);
+        jsonObject.put("thumbWidth", thumbWidth);
+        jsonObject.put("spanSize", spanSize);
+        jsonObject.put("spanIndex", spanIndex);
+        jsonObject.put("spanGroupIndex", spanGroupIndex);
+        jsonObject.put("favoriteSlot", favoriteSlot);
+        jsonObject.put("favoriteName", favoriteName);
+        jsonObject.put("tgList", new JSONArray(Collections.singletonList(tgList)));
+        jsonObject.put("pages", pages);
+        return jsonObject;
+    }
+
+    public static GalleryInfo galleryInfoFromJson(JSONObject object) {
+        GalleryInfo galleryInfo = new GalleryInfo();
+        galleryInfo.posted = object.getString("posted");
+        galleryInfo.category = object.getIntValue("category");
+        galleryInfo.favoriteName = object.getString("favoriteName");
+        galleryInfo.favoriteSlot = object.getIntValue("favoriteSlot");
+        galleryInfo.gid = object.getLongValue("gid");
+        galleryInfo.pages = object.getIntValue("pages");
+        galleryInfo.rated = object.getBoolean("rated");
+        galleryInfo.rating = object.getFloat("rating");
+        galleryInfo.simpleLanguage = object.getString("");
+        JSONArray simpleTagsArr = object.getJSONArray("simpleTags");
+        if (simpleTagsArr != null) {
+            try {
+                galleryInfo.simpleTags = simpleTagsArr.toJavaList(String.class).toArray(new String[0]);
+            } catch (ClassCastException ignore) {
+            }
+        }
+        galleryInfo.spanGroupIndex = object.getIntValue("spanGroupIndex");
+        galleryInfo.spanIndex = object.getIntValue("spanIndex");
+        galleryInfo.spanSize = object.getIntValue("spanSize");
+        JSONArray tgArray = object.getJSONArray("tgList");
+        if (tgArray != null) {
+            try {
+                galleryInfo.tgList = (ArrayList<String>) tgArray.toJavaList(String.class);
+            } catch (ClassCastException ignore) {
+            }
+        }
+
+        galleryInfo.thumb = object.getString("thumb");
+        galleryInfo.thumbHeight = object.getIntValue("thumbHeight");
+        galleryInfo.thumbWidth = object.getIntValue("thumbWidth");
+        galleryInfo.title = object.getString("title");
+        galleryInfo.titleJpn = object.getString("titleJpn");
+        galleryInfo.token = object.getString("token");
+        galleryInfo.uploader = object.getString("uploader");
+        return galleryInfo;
+    }
 }

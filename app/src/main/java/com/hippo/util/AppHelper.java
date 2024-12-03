@@ -23,18 +23,25 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkInfo;
 import android.net.Uri;
+import android.text.TextUtils;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
 import com.hippo.ehviewer.R;
+import com.google.firebase.crashlytics.FirebaseCrashlytics;
 
 public class AppHelper {
 
     public static boolean sendEmail(@NonNull Activity from, @NonNull String address,
-            @Nullable String subject, @Nullable String text) {
+                                    @Nullable String subject, @Nullable String text) {
         Intent i = new Intent(Intent.ACTION_SENDTO);
         i.setData(Uri.parse("mailto:" + address));
         if (subject != null) {
@@ -99,7 +106,7 @@ public class AppHelper {
         }
     }
 
-    public static void copyPlainText(String data,Context context) {
+    public static void copyPlainText(String data, Context context) {
         // 获取系统剪贴板
         ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
         // 创建一个剪贴数据集，包含一个普通文本数据条目（需要复制的数据）,其他的还有
@@ -111,5 +118,33 @@ public class AppHelper {
 
         // 把数据集设置（复制）到剪贴板
         clipboard.setPrimaryClip(clipData);
+    }
+
+    public static boolean checkVPN(Context context) {
+        ConnectivityManager connectivityManager = context.getSystemService(ConnectivityManager.class);
+
+        Network network = connectivityManager.getActiveNetwork();
+        //don't know why always returns null:
+        NetworkInfo networkInfo = connectivityManager.getNetworkInfo(network);
+        boolean result = networkInfo != null && networkInfo.getType() == ConnectivityManager.TYPE_VPN;
+        if (result) {
+            try {
+                Toast.makeText(context, R.string.network_remind, Toast.LENGTH_LONG).show();
+            } catch (RuntimeException ignore) {
+
+            }
+        }
+        return !result;
+    }
+
+    private boolean isWifiProxy(Context context) {
+        String proxyAddress;
+        int proxyPort;
+
+        proxyAddress = System.getProperty("http.proxyHost");
+        String portStr = System.getProperty("http.proxyPort");
+        proxyPort = Integer.parseInt((portStr != null ? portStr : "-1"));
+
+        return (!TextUtils.isEmpty(proxyAddress)) && (proxyPort != -1);
     }
 }
