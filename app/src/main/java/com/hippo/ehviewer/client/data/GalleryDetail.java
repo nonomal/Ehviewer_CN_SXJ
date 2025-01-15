@@ -19,6 +19,7 @@ package com.hippo.ehviewer.client.data;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.hippo.util.DataUtils;
 
 import java.util.Arrays;
 
@@ -36,14 +37,25 @@ public class GalleryDetail extends GalleryInfo {
     public String visible;
     public String language;
     public String size;
-    public int pages;
+//    public String updateUrl;
+//    public int pages;
+    public int SpiderInfoPages;
+
     public int favoriteCount;
     public boolean isFavorited;
     public int ratingCount;
     public GalleryTagGroup[] tags;
     public GalleryCommentList comments;
     public int previewPages;
+    public int SpiderInfoPreviewPages;
     public PreviewSet previewSet;
+    public PreviewSet SpiderInfoPreviewSet;
+
+//    public String body;
+//    @Nullable
+//    public GalleryDetail oldDetail;
+
+    public NewVersion[] newVersions;
 
     @Override
     public int describeContents() {
@@ -61,13 +73,19 @@ public class GalleryDetail extends GalleryInfo {
         dest.writeString(this.language);
         dest.writeString(this.size);
         dest.writeInt(this.pages);
+        dest.writeInt(this.SpiderInfoPages);
         dest.writeInt(this.favoriteCount);
         dest.writeByte(isFavorited ? (byte) 1 : (byte) 0);
         dest.writeInt(this.ratingCount);
         dest.writeParcelableArray(this.tags, flags);
         dest.writeParcelable(this.comments, flags);
         dest.writeInt(this.previewPages);
-        dest.writeParcelable(previewSet, flags);
+        dest.writeInt(this.SpiderInfoPreviewPages);
+        dest.writeParcelable(this.previewSet, flags);
+        dest.writeParcelable(this.SpiderInfoPreviewSet, flags);
+//        dest.writeString(this.body);
+//        dest.writeParcelable(oldDetail,flags);
+        dest.writeParcelableArray(this.newVersions,flags);
     }
 
     public GalleryDetail() {
@@ -83,6 +101,7 @@ public class GalleryDetail extends GalleryInfo {
         this.language = in.readString();
         this.size = in.readString();
         this.pages = in.readInt();
+        this.SpiderInfoPages = in.readInt();
         this.favoriteCount = in.readInt();
         this.isFavorited = in.readByte() != 0;
         this.ratingCount = in.readInt();
@@ -94,10 +113,20 @@ public class GalleryDetail extends GalleryInfo {
         }
         this.comments = in.readParcelable(getClass().getClassLoader());
         this.previewPages = in.readInt();
+        this.SpiderInfoPreviewPages = in.readInt();
         this.previewSet = in.readParcelable(PreviewSet.class.getClassLoader());
+        this.SpiderInfoPreviewSet = in.readParcelable(PreviewSet.class.getClassLoader());
+//        this.body = in.readString();
+//        this.oldDetail = in.readParcelable(GalleryDetail.class.getClassLoader());
+        Parcelable[] newVersionArray = in.readParcelableArray(NewVersion.class.getClassLoader());
+        if (newVersionArray != null) {
+            this.newVersions = Arrays.copyOf(newVersionArray, newVersionArray.length, NewVersion[].class);
+        } else {
+            this.newVersions = null;
+        }
     }
 
-    public static final Creator<GalleryDetail> CREATOR = new Creator<GalleryDetail>() {
+    public static final Creator<GalleryDetail> CREATOR = new Creator<>() {
         @Override
         public GalleryDetail createFromParcel(Parcel source) {
             return new GalleryDetail(source);
@@ -108,4 +137,30 @@ public class GalleryDetail extends GalleryInfo {
             return new GalleryDetail[size];
         }
     };
+
+    public GalleryDetail getNewGalleryDetail(int index) {
+       try{
+           GalleryDetail n = DataUtils.copy(this);
+           if (newVersions==null){
+               return n;
+           }
+           String updateUrl = newVersions[index].versionUrl;
+           String[] params = updateUrl.split("/");
+           int length = params.length;
+           n.token = params[length-1];
+           n.gid = Long.parseLong(params[length-2]);
+           n.newVersions = null;
+           return n;
+       }catch (Throwable e){
+           return this;
+       }
+    }
+
+    public String[] getUpdateVersionName(){
+        String[] result = new String[newVersions.length];
+        for (int i = 0; i < newVersions.length; i++) {
+            result[i] = newVersions[i].versionName;
+        }
+        return result;
+    }
 }

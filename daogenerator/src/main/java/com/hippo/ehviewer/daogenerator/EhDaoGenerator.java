@@ -17,7 +17,6 @@
 package com.hippo.ehviewer.daogenerator;
 
 
-
 import org.greenrobot.greendao.generator.DaoGenerator;
 import org.greenrobot.greendao.generator.Entity;
 import org.greenrobot.greendao.generator.Schema;
@@ -27,31 +26,32 @@ import org.jboss.forge.roaster.model.source.JavaClassSource;
 import java.io.File;
 import java.io.FileWriter;
 
-
-
-
 public class EhDaoGenerator {
 
     private static final String PACKAGE = "com.hippo.ehviewer.dao";
-    private static final String OUT_DIR = "../app/src/main/java-gen";
-    private static final String DELETE_DIR = "../app/src/main/java-gen/com/hippo/ehviewer/dao";
+    private static final String OUT_DIR = "app/src/main/java";
+    private static final String DELETE_DIR = OUT_DIR+"/com/hippo/ehviewer/dao";
 
     private static final int VERSION = 6;
 
-    private static final String DOWNLOAD_INFO_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/DownloadInfo.java";
-    private static final String HISTORY_INFO_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/HistoryInfo.java";
-    private static final String QUICK_SEARCH_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/QuickSearch.java";
-    private static final String LOCAL_FAVORITE_INFO_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/LocalFavoriteInfo.java";
-    private static final String BOOKMARK_INFO_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/BookmarkInfo.java";
-    private static final String FILTER_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/Filter.java";
-    private static final String BLACKLIST_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/BlackList.java";
-    private static final String GALLERY_TAG_PATH = "../app/src/main/java-gen/com/hippo/ehviewer/dao/GalleryTags.java";
+    private static final String DOWNLOAD_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/DownloadInfo.java";
+    private static final String HISTORY_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/HistoryInfo.java";
+    private static final String QUICK_SEARCH_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/QuickSearch.java";
+    private static final String LOCAL_FAVORITE_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/LocalFavoriteInfo.java";
+    private static final String BOOKMARK_INFO_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/BookmarkInfo.java";
+    private static final String FILTER_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/Filter.java";
+    private static final String BLACKLIST_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/BlackList.java";
+    private static final String GALLERY_TAG_PATH = OUT_DIR+"/com/hippo/ehviewer/dao/GalleryTags.java";
 
 
     public static void generate() throws Exception {
         Utilities.deleteContents(new File(DELETE_DIR));
-        File outDir = new File(OUT_DIR);
-        outDir.delete();
+        File absFile = new File("");
+        String absPath = absFile.getAbsolutePath()+"/"+OUT_DIR;
+        File outDir = new File(absPath);
+        if(!outDir.delete()){
+            outDir.deleteOnExit();
+        }
         outDir.mkdirs();
 
         Schema schema = new Schema(VERSION, PACKAGE);
@@ -76,8 +76,6 @@ public class EhDaoGenerator {
         adjustBookmarkInfo();
         adjustFilter();
     }
-
-
 
 
     private static void addGalleryTags(Schema schema) {
@@ -126,7 +124,7 @@ public class EhDaoGenerator {
 
         javaClass.addMethod("\t@Override\n" +
                 "\tpublic String toString() {\n" +
-                "\t\tJSONObject jsonObject = (JSONObject) JSONObject.toJSON(this);\n"+
+                "\t\tJSONObject jsonObject = (JSONObject) JSONObject.toJSON(this);\n" +
                 "\t\treturn jsonObject.toJSONString();\n" +
                 "\t}");
 
@@ -360,6 +358,8 @@ public class EhDaoGenerator {
         javaClass.addField("public static final int STATE_DOWNLOAD = 2");
         javaClass.addField("public static final int STATE_FINISH = 3");
         javaClass.addField("public static final int STATE_FAILED = 4");
+        javaClass.addField("public static final int STATE_UPDATE = 5");
+        javaClass.addField("public static final int GOTO_NEW = 6");
         javaClass.addField("public long speed");
         javaClass.addField("public long remaining");
         javaClass.addField("public int finished");
@@ -379,7 +379,50 @@ public class EhDaoGenerator {
                 "\t\tthis.simpleTags = galleryInfo.simpleTags;\n" +
                 "\t\tthis.simpleLanguage = galleryInfo.simpleLanguage;\n" +
                 "\t}").setConstructor(true);
+        javaClass.addMethod("public void updateInfo(GalleryInfo galleryInfo) {\n" +
+                "\t\tthis.token = galleryInfo.token;\n" +
+                "\t\tthis.title = galleryInfo.title;\n" +
+                "\t\tthis.titleJpn = galleryInfo.titleJpn;\n" +
+                "\t\tthis.thumb = galleryInfo.thumb;\n" +
+                "\t\tthis.category = galleryInfo.category;\n" +
+                "\t\tthis.posted = galleryInfo.posted;\n" +
+                "\t\tthis.uploader = galleryInfo.uploader;\n" +
+                "\t\tthis.rating = galleryInfo.rating;\n" +
+                "\t\tthis.simpleTags = galleryInfo.simpleTags;\n" +
+                "\t\tthis.simpleLanguage = galleryInfo.simpleLanguage;\n" +
+                "\t}");
         javaClass.addImport("com.hippo.ehviewer.client.data.GalleryInfo");
+
+        javaClass.addMethod("\tpublic JSONObject toJson(){\n" +
+                "\t\tJSONObject jsonObject = super.toJson();\n" +
+                "\t\tjsonObject.put(\"finished\",finished);\n" +
+                "\t\tjsonObject.put(\"legacy\",legacy);\n" +
+                "\t\tjsonObject.put(\"label\",label);\n" +
+                "\t\tjsonObject.put(\"downloaded\",downloaded);\n" +
+                "\t\tjsonObject.put(\"remaining\",remaining);\n" +
+                "\t\tjsonObject.put(\"speed\",speed);\n" +
+                "\t\tjsonObject.put(\"state\",state);\n" +
+                "\t\tjsonObject.put(\"time\",time);\n" +
+                "\t\tjsonObject.put(\"total\",total);\n" +
+                "\t\treturn  jsonObject;\n" +
+                "\t}");
+        javaClass.addImport("com.alibaba.fastjson.JSONObject");
+
+        javaClass.addMethod("\tpublic static DownloadInfo downloadInfoFromJson(JSONObject object) throws ClassCastException {\n" +
+                "\t\tDownloadInfo downloadInfo = (DownloadInfo) GalleryInfo.galleryInfoFromJson(object);\n" +
+                "\t\tdownloadInfo.finished = object.getIntValue(\"finished\");\n" +
+                "\t\tdownloadInfo.legacy = object.getIntValue(\"legacy\");\n" +
+                "\t\tdownloadInfo.label = object.getString(\"label\");\n" +
+                "\t\tdownloadInfo.downloaded = object.getIntValue(\"downloaded\");\n" +
+                "\t\tdownloadInfo.remaining = object.getLongValue(\"remaining\");\n" +
+                "\t\tdownloadInfo.speed = object.getLongValue(\"speed\");\n" +
+                "\t\tdownloadInfo.state = object.getIntValue(\"state\");\n" +
+                "\t\tdownloadInfo.time = object.getLongValue(\"time\");\n" +
+                "\t\tdownloadInfo.total = object.getIntValue(\"total\");\n" +
+                "\t\treturn downloadInfo;\n" +
+                "\t}");
+        javaClass.addImport("com.alibaba.fastjson.JSONArray");
+        javaClass.addImport("java.util.ArrayList");
 
         FileWriter fileWriter = new FileWriter(DOWNLOAD_INFO_PATH);
         fileWriter.write(javaClass.toString());
@@ -469,6 +512,34 @@ public class EhDaoGenerator {
         javaClass.addMethod("\t@Override\n" +
                 "\tpublic String toString() {\n" +
                 "\t\treturn name;\n" +
+                "\t}");
+        javaClass.addImport("com.alibaba.fastjson.JSONObject");
+
+        javaClass.addMethod("public JSONObject toJson(){\n" +
+                "\t\tJSONObject object = new JSONObject();\n" +
+                "\t\tobject.put(\"name\",name);\n" +
+                "\t\tobject.put(\"mode\",mode);\n" +
+                "\t\tobject.put(\"category\",category);\n" +
+                "\t\tobject.put(\"keyword\",keyword);\n" +
+                "\t\tobject.put(\"advanceSearch\",advanceSearch);\n" +
+                "\t\tobject.put(\"minRating\",minRating);\n" +
+                "\t\tobject.put(\"pageFrom\",pageFrom);\n" +
+                "\t\tobject.put(\"pageTo\",pageTo);\n" +
+                "\t\tobject.put(\"time\",time);\n" +
+                "\t\treturn object;\n" +
+                "\t}");
+        javaClass.addMethod("public static QuickSearch quickSearchFromJson(JSONObject object){\n" +
+                "\t\tQuickSearch search = new QuickSearch();\n" +
+                "\t\tsearch.name = object.getString(\"name\");\n" +
+                "\t\tsearch.mode = object.getIntValue(\"mode\");\n" +
+                "\t\tsearch.category = object.getIntValue(\"category\");\n" +
+                "\t\tsearch.keyword = object.getString(\"keyword\");\n" +
+                "\t\tsearch.advanceSearch = object.getIntValue(\"advanceSearch\");\n" +
+                "\t\tsearch.minRating = object.getIntValue(\"minRating\");\n" +
+                "\t\tsearch.pageFrom = object.getIntValue(\"pageFrom\");\n" +
+                "\t\tsearch.pageTo = object.getIntValue(\"pageTo\");\n" +
+                "\t\tsearch.time = object.getLongValue(\"time\");\n" +
+                "\t\treturn search;\n" +
                 "\t}");
 
         FileWriter fileWriter = new FileWriter(QUICK_SEARCH_PATH);

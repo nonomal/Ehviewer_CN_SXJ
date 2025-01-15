@@ -10,20 +10,31 @@ public class TagTranslationUtil {
 
     public static String getTagCN(String[] tags, EhTagDatabase ehTags) {
         if (ehTags != null && tags.length == 2) {
-            String group = ehTags.getTranslation("n:" + tags[0]);
+            String namespace = EhTagDatabase.prefixToNamespace(tags[0]+":");
+            if (namespace==null){
+                namespace = tags[0];
+            }
+            String group = ehTags.getTranslation("n:" + namespace);
             //翻译标签名
             String prefix = EhTagDatabase.namespaceToPrefix(tags[0]);
+            if (tags[0].length() == 1 && tags[0].matches("^[a-z]+$")) {
+                prefix = tags[0] + ":";
+            }
+
             String tagStr = ehTags.getTranslation(prefix != null ? prefix + tags[1] : "" + tags[1]);
 
 
             if (group != null && tagStr != null) {
-                return group + "：" + tagStr;
+                return group + ":" + tagStr;
             } else if (group != null && tagStr == null) {
-                return group + "：" + tags[1];
+                return group + ":" + tags[1];
             } else if (group == null && tagStr != null) {
-                return tags[0] + "：" + tagStr;
+                return tags[0] + ":" + tagStr;
             } else {
-                return tags[0] + ":" + tags[1];
+                if(tagStr != null)
+                    return tags[0] + ":" + tagStr;
+                else
+                    return tags[0] + ":" + tags[1];
             }
         } else {
             StringBuffer s = new StringBuffer();
@@ -65,6 +76,10 @@ public class TagTranslationUtil {
             }
             return s.toString();
         }
+    }
+
+    public static String getTagCN(String tag, EhTagDatabase ehTags) {
+        return getTagCN(tag.split(":"),ehTags);
     }
 
 

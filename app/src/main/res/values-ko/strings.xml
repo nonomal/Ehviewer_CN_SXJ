@@ -101,7 +101,7 @@
     <string name="app_waring">이 앱의 내용은 인터넷에서 받아옵니다. 이 앱을 사용하기 위해서는 받아온 내용 중 일부가 사용자에게 가할 수 있는 신체적 또는 정신적 피해를 감수해야 합니다.</string>
     <string name="error_username_cannot_empty">사용자 이름은 비워둘 수 없습니다.</string>
     <string name="error_password_cannot_empty">비밀번호는 비워둘 수 없습니다.</string>
-    <string name="skip_signing_in">로그인 없이 사용</string>
+    <string name="guest_mode">게스트 모드</string>
     <string name="sign_in_failed">로그인 실패</string>
     <string name="sign_in_failed_tip">오류가 계속되면 WebView 또는 쿠키를 통한 로그인을 시도해보세요.</string>
     <string name="sign_in_failed_plain">뭔가가 잘못되었습니다. 웹사이트가 업데이트 중일 수 있습니다. WebView 또는 쿠키를 사용하여 로그인하거나 아래 버튼을 눌러 로그인을 건너뛸 수 있습니다. 그러나 로그인을 건너뛰면 "슬픈 팬더"를 보게 될 것입니다.</string>
@@ -309,7 +309,7 @@
     <string name="tag_filter">태그 필터링</string>
 
     <!-- Download -->
-    <string name="scene_download_title">다운로드 - %s</string>
+    <string name="scene_download_title">%s 갤러리 - %s</string>
     <string name="no_download_info">다운로드한 항목이 여기에 표시됩니다.</string>
     <string name="download_state_none">유휴 상태</string>
     <string name="download_state_wait">대기 중</string>
@@ -719,8 +719,8 @@
     <string name="no_archives">아카이브 없음</string>
     <string name="download_archive_started">아카이브 다운로드가 시작되었습니다.</string>
     <string name="download_archive_failure">아카이브 다운로드에 실패했습니다.</string>
-    <string name="archive">아카이브</string>
-    <string name="download_archive_failure_no_hath">아카이브를 다운로드하려면 H@H 클라이언트가 필요합니다.</string>
+    <string name="h_h">H@H</string>
+    <string name="download_h_h_failure_no_hath">아카이브를 다운로드하려면 H@H 클라이언트가 필요합니다.</string>
     <string name="settings_privacy">개인 정보</string>
     <string name="settings_privacy_secure">화면 캡처 허용 안 함</string>
     <string name="settings_privacy_secure_summary">이 앱에서 스크린샷을 찍을 수 없게 하며, \"최근 앱\" 화면에서 앱의 내용을 보이지 않게 합니다.</string>
@@ -762,6 +762,7 @@
     <string name="add_tag_dialog_title">태그 추가</string>
     <string name="tag_title">태그</string>
     <string name="empty_subscription">구독 목록이 비어 있음</string>
+    <string name="subscription_success">%s success</string>
 
     <!-- 下?通知   -->
     <string name="download_torrent_name">시드: %s</string>
@@ -776,4 +777,37 @@
 
     <string name="yes">예</string>
     <string name="cancel">취소</string>
+    <string name="settings_eh_list_show_read_progress">Show reading progress</string>
+    <string name="settings_eh_list_show_read_progress_summary">Display reading progress for each gallery in detail list mode</string>
+    <string name="cookie_login_import_in_clipboard">Import from clipboard</string>
+    <string name="no_cookie_in_clipboard">No valid data found from clipboard</string>
+    <string name="gallery_update_dialog_title">Update method</string>
+    <string name="gallery_update_dialog_message"><![CDATA[Overwrite old gallery: Only the downloaded version will be kept, the old version will be deleted.&#xA;Download as new gallery: The downloaded gallery will exist as a new gallery, and both the new gallery and the old gallery will be saved.]]></string>
+    <string name="gallery_update_download_as_new">Download as new</string>
+    <string name="gallery_update_override_old">Overwrite old</string>
+    <string name="loading_db_file">Data Loading …</string>
+    <string name="settings_eh_history_size">Number of historical records</string>
+    <string name="history_info_unlimited">Unlimited</string>
+    <string name="archiver">Archiver</string>
+    <string name="archiver_dialog_current_funds">Current Funds:</string>
+    <string name="archiver_dialog_download_original">Download Original Archive</string>
+    <string name="archiver_dialog_download_resample">Download Resample Archive</string>
+    <string name="archiver_dialog_size">Estimated Size:  %s</string>
+    <string name="dialog_archiver_title">Archiver Downloader</string>
+    <string name="download_receiver_label">EhViewer Download Receiver</string>
+    <string name="decompressed_successfully">Decompressed successfully!</string>
+    <string name="decompression_failed">Decompression failed!</string>
+    <string name="download_label_archiver">Archiver</string>
+    <string name="cookie_in_clipboard_incorrect">Cookie format is incorrect</string>
+    <string name="settings_download_timeout">Download timeout</string>
+    <string name="download_timeout_unlimited">Unlimited</string>
+    <string name="settings_download_timeout_summary">%s(S),Maximum time allowed to download an image.</string>
+    <string name="have_new_version">Click to see new gallery version</string>
+    <string name="archiver_downloading">Arc Downloading %s</string>
+    <string name="order">Order</string>
+    <string name="sort_by_pub_time">Published Time</string>
+    <string name="sort_by_fav_time">Favorited Time</string>
+    <string name="settings_eh_sign_out_restart">Automatically restarting for you, please wait</string>
+
+
 </resources>

@@ -70,6 +70,10 @@
     <color name="gallery_detail_button_background_dark">@color/grey_800</color>
     <color name="gallery_detail_button_background_black">@color/grey_900</color>
 
+    <color name="icon_color">@color/grey_100</color>
+    <color name="icon_color_dark">@color/grey_100</color>
+    <color name="icon_color_black">@color/grey_100</color>
+
     <color name="red_500">#fff44336</color>
     <color name="teal_500">#ff009688</color>
     <color name="teal_700">#ff00796b</color>
@@ -122,7 +126,7 @@
     <color name="grey_100">#fff5f5f5</color>
     <color name="brown_500">#ff795548</color>
 
-    <color name="colorPrimary">@color/teal_500</color>
+    <color name="colorPrimary" >@color/teal_500</color>
     <color name="colorPrimaryDark">@color/teal_700</color>
     <color name="colorAccent">@color/purple_a200</color>
 
@@ -145,6 +149,7 @@
     <color name="manga">#ffff9800</color>
     <!-- Yellow 700 -->
     <color name="artist_cg">#ffFbc02d</color>
+    <color name="new_version_bg_color">#E6FFEB3B</color>
     <!-- Green -->
     <color name="game_cg">#ff4caf50</color>
     <!-- Light Green -->
@@ -186,4 +191,38 @@
 
     <!--Shortcut background-->
     <color name="shortcut_bg">#F5F5F5</color>
+    <color name="light_blue_600">#FF039BE5</color>
+    <color name="light_blue_900">#FF01579B</color>
+    <color name="light_blue_A200">#FF40C4FF</color>
+    <color name="light_blue_A400">#FF00B0FF</color>
+    <color name="black_overlay">#66000000</color>
+
+    <!--  socket  -->
+    <!--  未使用  -->
+    <color name="socket0">#e21400</color>
+    <color name="socket1">#91580f</color>
+    <color name="socket2">#f8a700</color>
+    <color name="socket3">#f78b00</color>
+    <color name="socket4">#58dc00</color>
+    <color name="socket5">#287b00</color>
+    <color name="socket6">#a8f07a</color>
+    <color name="socket7">#4ae8c4</color>
+    <color name="socket8">#3b88eb</color>
+    <color name="socket9">#3824aa</color>
+    <color name="socket10">#a700ff</color>
+    <color name="socket11">#d300e7</color>
+
+    <!--  账号配额相关  -->
+    <color name="colorLimitCountBg">#ff009688</color>
+    <color name="colorLimitCountBgDark">#ff009688</color>
+    <color name="colorLimitCountBgBlack">#ff009688</color>
+    <color name="shape_color_limits">@color/teal_500</color>
+    <color name="shape_color_limits_dart">@color/grey_675</color>
+    <color name="shape_color_limits_black">@color/grey_675</color>
+    <color name="home_shadow_color">@color/grey_350</color>
+    <color name="home_shadow_color_dark">@color/grey_825</color>
+    <color name="home_shadow_color_black">@color/grey_825</color>
+    <color name="light_blue_50">#FFE1F5FE</color>
+    <color name="light_blue_200">#FF81D4FA</color>
+
 </resources>

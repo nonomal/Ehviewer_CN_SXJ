@@ -60,12 +60,17 @@
         <item name="toolbarPopupTheme">@style/ThemeOverlay.AppCompat.Light</item>
         <item name="galleryDetailDivider">@drawable/divider_gallery_detail_light</item>
 
+        <item name="limitCountBgColor">@color/colorLimitCountBg</item>
+        <item name="limits_shape_color">@color/shape_color_limits</item>
+        <item name="home_shadow">@color/home_shadow_color</item>
+
+        <item name="iconColor">@color/icon_color</item>
     </style>
 
     <style name="AppTheme" parent="BaseTheme">
         <item name="android:windowBackground">@color/white</item>
     </style>
-<!--    <style name="AppTheme" parent="BaseTheme"/>-->
+    <!--    <style name="AppTheme" parent="BaseTheme"/>-->
 
     <style name="AppTheme.NoActionBar">
         <item name="windowActionBar">false</item>
@@ -124,6 +129,11 @@
         <item name="toolbarPopupTheme">@style/ThemeOverlay.AppCompat.Dark</item>
         <item name="galleryDetailDivider">@drawable/divider_gallery_detail_dark</item>
 
+        <item name="limitCountBgColor">@color/colorLimitCountBgDark</item>
+        <item name="limits_shape_color">@color/shape_color_limits_dart</item>
+        <item name="home_shadow">@color/home_shadow_color_dark</item>
+
+        <item name="iconColor">@color/icon_color_dark</item>
     </style>
 
     <style name="AppTheme.Dark" parent="BaseTheme.Dark"></style>
@@ -182,6 +192,11 @@
         <item name="toolbarPopupTheme">@style/ThemeOverlay.AppCompat.Dark</item>
         <item name="galleryDetailDivider">@drawable/divider_gallery_detail_dark</item>
 
+        <item name="limitCountBgColor">@color/colorLimitCountBgBlack</item>
+        <item name="limits_shape_color">@color/shape_color_limits_black</item>
+        <item name="home_shadow">@color/home_shadow_color_black</item>
+
+        <item name="iconColor">@color/icon_color_black</item>
     </style>
 
     <style name="AppTheme.Black" parent="BaseTheme.Black"></style>
@@ -208,8 +223,10 @@
 
     <style name="AppTheme.Toolbar.Black" parent="AppTheme.Black.NoActionBar" />
 
-    <style name="AppTheme.Gallery" parent="AppTheme.Dark.NoActionBar">
+    <style name="AppTheme.Gallery" parent="AppTheme.Dark">
         <item name="gallerySliderBackgroundColor">@color/gallery_slider_background_dark</item>
+        <item name="windowNoTitle">true</item>
+<!--        <item name="android:windowFullscreen">true</item>-->
     </style>
 
     <style name="AppTheme.Gallery.Dark" />
@@ -245,6 +262,25 @@
     <style name="RatingBarTheme" parent="ThemeOverlay.AppCompat">
         <item name="colorControlNormal">@color/yellow_800</item>
         <item name="colorControlActivated">@color/yellow_800</item>
+    </style>
+
+    <style name="ThemeOverlay.Ehviewer.FullscreenContainer" parent="">
+        <item name="fullscreenBackgroundColor">@color/light_blue_600</item>
+        <item name="fullscreenTextColor">@color/light_blue_A200</item>
+    </style>
+    <style name="AppTheme.AppWidgetContainerParent" parent="@android:style/Theme.DeviceDefault">
+        <!-- Radius of the outer bound of widgets to make the rounded corners -->
+        <item name="appWidgetRadius">16dp</item>
+        <!--
+        Radius of the inner view's bound of widgets to make the rounded corners.
+        It needs to be 8dp or less than the value of appWidgetRadius
+        -->
+        <item name="appWidgetInnerRadius">8dp</item>
+    </style>
+
+    <style name="AppTheme.AppWidgetContainer" parent="AppTheme.AppWidgetContainerParent">
+        <!-- Apply padding to avoid the content of the widget colliding with the rounded corners -->
+        <item name="appWidgetPadding">16dp</item>
     </style>
 
 </resources>

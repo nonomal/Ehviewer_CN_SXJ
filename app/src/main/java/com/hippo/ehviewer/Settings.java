@@ -16,6 +16,10 @@
 
 package com.hippo.ehviewer;
 
+import static com.hippo.ehviewer.client.EhConfig.IMAGE_SIZE_780X;
+import static com.hippo.ehviewer.client.EhConfig.IMAGE_SIZE_980X;
+
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
@@ -25,18 +29,22 @@ import android.util.Log;
 import androidx.annotation.DimenRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+
+import com.alibaba.fastjson.JSONObject;
 import com.hippo.ehviewer.client.EhConfig;
 import com.hippo.ehviewer.client.EhUtils;
 import com.hippo.ehviewer.client.data.FavListUrlBuilder;
+import com.hippo.ehviewer.client.data.GalleryInfo;
 import com.hippo.ehviewer.ui.CommonOperations;
 import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
-import com.hippo.glgallery.GalleryView;
+import com.hippo.lib.glgallery.GalleryView;
 import com.hippo.unifile.UniFile;
 import com.hippo.util.ExceptionUtils;
-import com.hippo.yorozuya.AssertUtils;
-import com.hippo.yorozuya.FileUtils;
-import com.hippo.yorozuya.MathUtils;
-import com.hippo.yorozuya.NumberUtils;
+import com.hippo.lib.yorozuya.AssertUtils;
+import com.hippo.lib.yorozuya.FileUtils;
+import com.hippo.lib.yorozuya.MathUtils;
+import com.hippo.lib.yorozuya.NumberUtils;
+
 import java.io.File;
 import java.util.Locale;
 
@@ -44,18 +52,21 @@ public class Settings {
 
     private static final String TAG = Settings.class.getSimpleName();
 
+    @SuppressLint("StaticFieldLeak")
     private static Context sContext;
     private static SharedPreferences sSettingsPre;
+    private static SharedPreferences sArchiverPre;
     private static EhConfig sEhConfig;
 
     public static void initialize(Context context) {
         sContext = context.getApplicationContext();
         sSettingsPre = PreferenceManager.getDefaultSharedPreferences(sContext);
+        sArchiverPre = context.getSharedPreferences("archiver_cache",Context.MODE_PRIVATE);
         sEhConfig = loadEhConfig();
-        fixDefaultValue(context);
+        fixDefaultValue();
     }
 
-    private static void fixDefaultValue(Context context) {
+    private static void fixDefaultValue() {
         // Enable builtin hosts if the country is CN
         if (!sSettingsPre.contains(KEY_BUILT_IN_HOSTS)) {
             if ("CN".equals(Locale.getDefault().getCountry())) {
@@ -79,6 +90,34 @@ public class Settings {
         ehConfig.excludedNamespaces = getExcludedTagNamespaces();
         ehConfig.setDirty();
         return ehConfig;
+    }
+
+    public static GalleryInfo getArchiverDownload(long downloadId){
+        String s = sArchiverPre.getString(String.valueOf(downloadId),"");
+        if (s.isEmpty()){
+            return null;
+        }
+        return GalleryInfo.galleryInfoFromJson(JSONObject.parseObject(s));
+    }
+
+    public static void putArchiverDownload(long downloadId,GalleryInfo info){
+        sArchiverPre.edit().putString(String.valueOf(downloadId),info.toJson().toJSONString()).apply();
+    }
+
+    public static boolean deleteArchiverDownload(long downloadId){
+        return sArchiverPre.edit().remove(String.valueOf(downloadId)).commit();
+    }
+
+    public static long getArchiverDownloadId(long gid){
+        return sArchiverPre.getLong(gid+"DId",-1L);
+    }
+
+    public static void putArchiverDownloadId(long gid,long downloadId){
+        sArchiverPre.edit().putLong(gid+"DId",downloadId).apply();
+    }
+
+    public static boolean deleteArchiverDownloadId(long gid){
+        return sArchiverPre.edit().remove(gid+"DId").commit();
     }
 
     public static boolean getBoolean(String key, boolean defValue) {
@@ -262,20 +301,21 @@ public class Settings {
     public static final int THEME_BLACK = 2;
     private static final int DEFAULT_THEME = THEME_LIGHT;
 
-    private static boolean overSet = false;
+//    private static boolean overSet = false;
 
-    public static int getTheme(Context context) {
-        if (getDarkModeStatus(context) && !overSet){
-            return THEME_BLACK;
-        }
+//    public static int getTheme(Context context) {
+    public static int getTheme() {
+//        if (getDarkModeStatus(context) && !overSet){
+//            return THEME_BLACK;
+//        }
         return getIntFromStr(KEY_THEME, DEFAULT_THEME);
     }
 
     public static void putTheme(int theme) {
-        if (!overSet){
-            overSet = true;
-            System.out.println("覆盖主题");
-        }
+//        if (!overSet){
+//            overSet = true;
+//            System.out.println("覆盖主题");
+//        }
         putIntToStr(KEY_THEME, theme);
     }
 
@@ -499,6 +539,17 @@ public class Settings {
         putIntToStr(KEY_START_POSITION, value);
     }
 
+    private static final String KEY_START_TRANSFER_TIME = "start_transfer_time";
+    private static final int DEFAULT_START_TRANSFER_TIME = 2;
+
+    public static int getStartTransferTime() {
+        return getInt(KEY_START_TRANSFER_TIME, DEFAULT_START_TRANSFER_TIME);
+    }
+
+    public static void putStartTransferTime(int value) {
+        putInt(KEY_START_TRANSFER_TIME, value);
+    }
+
     private static final String KEY_KEEP_SCREEN_ON = "keep_screen_on";
     private static final boolean DEFAULT_KEEP_SCREEN_ON = false;
 
@@ -563,6 +614,18 @@ public class Settings {
 
     public static void putVolumePage(boolean value) {
         putBoolean(KEY_VOLUME_PAGE, value);
+    }
+
+
+    private static final String KEY_REVERSE_VOLUME_PAGE = "reverse_volume_page";
+    private static final boolean DEFAULT_REVERSE_VOLUME_PAGE = false;
+
+    public static boolean getReverseVolumePage() {
+        return getBoolean(KEY_REVERSE_VOLUME_PAGE, DEFAULT_REVERSE_VOLUME_PAGE);
+    }
+
+    public static void putReverseVolumePage(boolean value) {
+        putBoolean(KEY_REVERSE_VOLUME_PAGE, value);
     }
 
     private static final String KEY_READING_FULLSCREEN = "reading_fullscreen";
@@ -719,10 +782,18 @@ public class Settings {
     public static final String DEFAULT_IMAGE_RESOLUTION = EhConfig.IMAGE_SIZE_AUTO;
 
     public static String getImageResolution() {
-        return getString(KEY_IMAGE_RESOLUTION, DEFAULT_IMAGE_RESOLUTION);
+        String result = getString(KEY_IMAGE_RESOLUTION, DEFAULT_IMAGE_RESOLUTION);
+        if (result.equals(IMAGE_SIZE_980X)){
+            putImageResolution(IMAGE_SIZE_780X);
+            return IMAGE_SIZE_780X;
+        }
+        return result;
     }
 
     public static void putImageResolution(String value) {
+        if(null==value||null==sEhConfig){
+            return;
+        }
         sEhConfig.imageSize = value;
         sEhConfig.setDirty();
         putString(KEY_IMAGE_RESOLUTION, value);
@@ -1243,12 +1314,61 @@ public class Settings {
         putBoolean(KEY_SHOW_GALLERY_COMMENT, value);
     }
 
+    public static final String KEY_CLOSE_AUTO_UPDATES = "close_auto_updates";
+
+    private static boolean IS_CLOSE_AUTO_UPDATES = false;
+
+    public static boolean getCloseAutoUpdate() {
+        return getBoolean(KEY_CLOSE_AUTO_UPDATES, IS_CLOSE_AUTO_UPDATES);
+    }
+
+    public static void setKeyCloseAutoUpdates(boolean value) {
+        putBoolean(KEY_CLOSE_AUTO_UPDATES, value);
+    }
+
+    public static final String KEY_SHOW_EH_EVENTS = "show_eh_events";
+
+    private static boolean IS_SHOW_EH_EVENTS = true;
+
+    public static boolean getShowEhEvents() {
+        return getBoolean(KEY_SHOW_EH_EVENTS, IS_SHOW_EH_EVENTS) && isLogin();
+    }
+
+    public static void setKeyShowEhEvents(boolean value) {
+        putBoolean(KEY_SHOW_EH_EVENTS, value);
+    }
+
+    public static final String KEY_SHOW_EH_LIMITS = "show_eh_limits";
+
+    private static boolean IS_SHOW_EH_LIMITS = true;
+
+    public static boolean getShowEhLimits() {
+        return getBoolean(KEY_SHOW_EH_LIMITS, IS_SHOW_EH_LIMITS) && isLogin();
+    }
+
+    public static void setKeyShowEhLimits(boolean value) {
+        putBoolean(KEY_SHOW_EH_LIMITS, value);
+    }
+
+
+//    public static final String KEY_LOCK_COOKIE_IGNEOUS = "lock_cookie_igneous";
+//
+//    private static boolean IS_LOCK_COOKIE_IGNEOUS = false;
+//
+//    public static boolean getLockCookieIgneous() {
+//        return getBoolean(KEY_LOCK_COOKIE_IGNEOUS, IS_LOCK_COOKIE_IGNEOUS) ;
+//    }
+//
+//    public static void setLockCookieIgneous(boolean value) {
+//        putBoolean(KEY_LOCK_COOKIE_IGNEOUS, value);
+//    }
+
     public static final String USER_BACKGROUND_IMAGE = "background_image_path";
     public static final String USER_AVATAR_IMAGE = "avatar_image_path";
 
     public static File getUserImageFile(String key){
         String path = getString(key,"");
-        if (path.equals("")){
+        if (path.isEmpty()){
             return null;
         }
         File file = new File(path);
@@ -1263,13 +1383,68 @@ public class Settings {
         putString(key,path);
     }
 
-//    private static boolean ALREADY_CHECK;
-//
-//    public static void setCheckUpdate(boolean b){
-//        ALREADY_CHECK = b;
-//    }
-//
-//    public static boolean getCheckUpdateState(){
-//        return ALREADY_CHECK;
-//    }
+    public static final String KEY_DOWNLOAD_ORDER_ASC = "download_order_asc";
+
+    public static boolean getDownloadOrder() {
+        return getBoolean(KEY_DOWNLOAD_ORDER_ASC, true) ;
+    }
+
+    public static void setDownloadOrder(boolean value) {
+        putBoolean(KEY_DOWNLOAD_ORDER_ASC, value);
+    }
+
+    public static final String KEY_DOWNLOAD_LIST_PAGINATION = "download_list_pagination";
+
+    private static boolean IS_DOWNLOAD_LIST_PAGINATION = true;
+
+    public static boolean getDownloadPagination() {
+        return getBoolean(KEY_DOWNLOAD_LIST_PAGINATION, IS_DOWNLOAD_LIST_PAGINATION) ;
+    }
+
+    public static void setDownloadPagination(boolean value) {
+        putBoolean(KEY_DOWNLOAD_LIST_PAGINATION, value);
+    }
+
+    public static final String KEY_SHOW_READ_PROGRESS = "show_read_progress";
+
+    private static boolean IS_SHOW_READ_PROGRESS = true;
+
+    public static boolean getShowReadProgress() {
+        return getBoolean(KEY_SHOW_READ_PROGRESS, IS_SHOW_READ_PROGRESS) ;
+    }
+
+    public static void setShowReadProgress(boolean value) {
+        putBoolean(KEY_SHOW_READ_PROGRESS, value);
+    }
+
+    public static final String KEY_HISTORY_INFO_SIZE = "history_info_size";
+
+    public static int DEFAULT_HISTORY_INFO_SIZE = 100;
+
+    public static int getHistoryInfoSize() {
+        int size = getIntFromStr(KEY_HISTORY_INFO_SIZE, DEFAULT_HISTORY_INFO_SIZE);
+        if (size<DEFAULT_HISTORY_INFO_SIZE){
+            setHistoryInfoSize(DEFAULT_HISTORY_INFO_SIZE);
+            return DEFAULT_HISTORY_INFO_SIZE;
+        }
+        return size;
+    }
+
+    public static void setHistoryInfoSize(int value) {
+        putIntToStr(KEY_HISTORY_INFO_SIZE, value);
+    }
+
+    public static final String KEY_DOWNLOAD_TIMEOUT = "download_timeout";
+
+    public static int DEFAULT_DOWNLOAD_TIMEOUT = 0;
+
+    public static int getDownloadTimeout() {
+        int size = getIntFromStr(KEY_DOWNLOAD_TIMEOUT, DEFAULT_DOWNLOAD_TIMEOUT);
+        return Math.max(size, DEFAULT_DOWNLOAD_TIMEOUT);
+    }
+
+    public static void setDownloadTimeout(int value) {
+        putIntToStr(KEY_DOWNLOAD_TIMEOUT, value);
+    }
+
 }

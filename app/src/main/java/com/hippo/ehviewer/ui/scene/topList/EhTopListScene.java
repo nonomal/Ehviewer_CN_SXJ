@@ -104,8 +104,6 @@ public class EhTopListScene extends BaseScene {
         Context context = getEHContext();
 
         mClient = EhApplication.getEhClient(context);
-
-
     }
 
     @Nullable
@@ -278,7 +276,7 @@ public class EhTopListScene extends BaseScene {
     /**
      * 请求返回监听
      */
-    private static class GetTopListDetailListener extends EhCallback<EhTopListScene, EhTopListDetail> {
+    private class GetTopListDetailListener extends EhCallback<EhTopListScene, EhTopListDetail> {
 
         public GetTopListDetailListener(Context context, int stageId, String sceneTag) {
             super(context, stageId, sceneTag);
@@ -291,10 +289,7 @@ public class EhTopListScene extends BaseScene {
 
         @Override
         public void onSuccess(EhTopListDetail result) {
-            EhTopListScene scene = getScene();
-            if (null != scene) {
-                scene.onGetEhTopListDetailSuccess(result, 0);
-            }
+            onGetEhTopListDetailSuccess(result, 0);
         }
 
         @Override
@@ -309,12 +304,20 @@ public class EhTopListScene extends BaseScene {
     }
 
     private class EhTopListAdapterView extends EhTopListAdapter {
-        private SceneFragment sceneFragment;
-        private HashMap<Integer, Integer> hashMap = new HashMap();
+        private final SceneFragment sceneFragment;
+        private final HashMap<Integer, Integer> hashMap = new HashMap();
 
         public EhTopListAdapterView(@NonNull Context context, @NonNull RecyclerView recyclerView, TopListInfo topListInfo, SceneFragment scene, int searchType) {
-            super(context, recyclerView, topListInfo, searchType);
+            super(context, topListInfo, searchType);
             sceneFragment = scene;
+        }
+
+        @Override
+        void clickTitle(String urlFollow) {
+            ListUrlBuilder urlBuilder = new ListUrlBuilder();
+            urlBuilder.setMode(ListUrlBuilder.MODE_TOP_LIST);
+            urlBuilder.setFollow(urlFollow);
+            GalleryListScene.startScene(sceneFragment, urlBuilder);
         }
 
         @Override
@@ -340,7 +343,6 @@ public class EhTopListScene extends BaseScene {
             }
             urlBuilder.setKeyword(topListItem.value);
             GalleryListScene.startScene(sceneFragment, urlBuilder);
-            return;
         }
     }
 

@@ -16,17 +16,19 @@
 
 package com.hippo.ehviewer;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.Environment;
 import androidx.annotation.Nullable;
 import com.hippo.ehviewer.client.exception.ParseException;
 import com.hippo.util.ReadableTime;
-import com.hippo.yorozuya.FileUtils;
-import com.hippo.yorozuya.IOUtils;
+import com.hippo.lib.yorozuya.FileUtils;
+import com.hippo.lib.yorozuya.IOUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 
 public class AppConfig {
 
@@ -34,12 +36,14 @@ public class AppConfig {
 
     private static final String DOWNLOAD = "download";
     private static final String TEMP = "temp";
+    private static final String ARCHIVER = "archiver";
     private static final String IMAGE = "image";
     private static final String PARSE_ERROR = "parse_error";
     private static final String LOGCAT = "logcat";
     private static final String DATA = "data";
     private static final String CRASH = "crash";
 
+    @SuppressLint("StaticFieldLeak")
     private static Context sContext;
 
     public static void initialize(Context context) {
@@ -87,6 +91,10 @@ public class AppConfig {
     public static File getExternalTempDir() {
         return getDirInExternalAppDir(TEMP);
     }
+    @Nullable
+    public static File getExternalArchiverDir() {
+        return getDirInExternalAppDir(ARCHIVER);
+    }
 
     @Nullable
     public static File getExternalImageDir() {
@@ -113,16 +121,27 @@ public class AppConfig {
         return getDirInExternalAppDir(CRASH);
     }
 
-    @Nullable
-    public static File createExternalTempFile() {
-        return FileUtils.createTempFile(getExternalTempDir(), null);
-    }
+//    @Nullable
+//    public static File createExternalTempFile() {
+//        return FileUtils.createTempFile(getExternalTempDir(), null);
+//    }
 
     @Nullable
     public static File getTempDir() {
         File dir = sContext.getCacheDir();
         File file;
         if (null != dir && FileUtils.ensureDirectory(file = new File(dir, TEMP))) {
+            return file;
+        } else {
+            return null;
+        }
+    }
+
+    @Nullable
+    public static File getArchiverDir() {
+        File dir = sContext.getCacheDir();
+        File file;
+        if (null != dir && FileUtils.ensureDirectory(file = new File(dir, ARCHIVER))) {
             return file;
         } else {
             return null;
@@ -147,11 +166,11 @@ public class AppConfig {
             String message = e.getMessage();
             String body = e.getBody();
             if (null != message) {
-                os.write(message.getBytes("utf-8"));
+                os.write(message.getBytes(StandardCharsets.UTF_8));
                 os.write('\n');
             }
             if (null != body) {
-                os.write(body.getBytes("utf-8"));
+                os.write(body.getBytes(StandardCharsets.UTF_8));
             }
             os.flush();
         } catch (IOException e1) {

@@ -31,6 +31,7 @@ import android.net.ConnectivityManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.PersistableBundle;
 import android.text.TextUtils;
@@ -69,8 +70,8 @@ import com.hippo.ehviewer.ui.main.UserImageChange;
 import com.hippo.ehviewer.ui.scene.AnalyticsScene;
 import com.hippo.ehviewer.ui.scene.BaseScene;
 import com.hippo.ehviewer.ui.scene.CookieSignInScene;
-import com.hippo.ehviewer.ui.scene.DownloadLabelsScene;
-import com.hippo.ehviewer.ui.scene.DownloadsScene;
+import com.hippo.ehviewer.ui.scene.download.DownloadLabelsScene;
+import com.hippo.ehviewer.ui.scene.download.DownloadsScene;
 import com.hippo.ehviewer.ui.scene.FavoritesScene;
 import com.hippo.ehviewer.ui.scene.GalleryCommentsScene;
 import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
@@ -79,7 +80,7 @@ import com.hippo.ehviewer.ui.scene.gallery.list.GalleryListScene;
 import com.hippo.ehviewer.ui.scene.GalleryPreviewsScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.SubscriptionsScene;
 import com.hippo.ehviewer.ui.scene.topList.EhTopListScene;
-import com.hippo.ehviewer.ui.scene.HistoryScene;
+import com.hippo.ehviewer.ui.scene.history.HistoryScene;
 import com.hippo.ehviewer.ui.scene.ProgressScene;
 import com.hippo.ehviewer.ui.scene.gallery.list.QuickSearchScene;
 import com.hippo.ehviewer.ui.scene.SecurityScene;
@@ -88,7 +89,9 @@ import com.hippo.ehviewer.ui.scene.SignInScene;
 import com.hippo.ehviewer.ui.scene.SolidScene;
 import com.hippo.ehviewer.ui.scene.WarningScene;
 import com.hippo.ehviewer.ui.scene.WebViewSignInScene;
+import com.hippo.ehviewer.ui.splash.SplashActivity;
 import com.hippo.ehviewer.widget.EhDrawerLayout;
+import com.hippo.ehviewer.widget.LimitsCountView;
 import com.hippo.io.UniFileInputStreamPipe;
 import com.hippo.network.Network;
 import com.hippo.scene.Announcer;
@@ -99,10 +102,10 @@ import com.hippo.util.BitmapUtils;
 import com.hippo.util.GifHandler;
 import com.hippo.util.PermissionRequester;
 import com.hippo.widget.AvatarImageView;
-import com.hippo.yorozuya.IOUtils;
-import com.hippo.yorozuya.ResourcesUtils;
-import com.hippo.yorozuya.SimpleHandler;
-import com.hippo.yorozuya.ViewUtils;
+import com.hippo.lib.yorozuya.IOUtils;
+import com.hippo.lib.yorozuya.ResourcesUtils;
+import com.hippo.lib.yorozuya.SimpleHandler;
+import com.hippo.lib.yorozuya.ViewUtils;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -115,7 +118,7 @@ import okhttp3.Cookie;
 import okhttp3.HttpUrl;
 
 public final class MainActivity extends StageActivity
-        implements NavigationView.OnNavigationItemSelectedListener, ImageChangeCallBack {
+        implements NavigationView.OnNavigationItemSelectedListener, ImageChangeCallBack, DrawerLayout.DrawerListener {
 
     private static final int PERMISSION_REQUEST_WRITE_EXTERNAL_STORAGE = 0;
 
@@ -136,11 +139,11 @@ public final class MainActivity extends StageActivity
     @Nullable
     private AvatarImageView mAvatar;
     @Nullable
-    private AvatarImageView mAvatarGif;
-    @Nullable
     private ImageView mHeaderBackground;
     @Nullable
     private TextView mDisplayName;
+    @Nullable
+    private LimitsCountView limitsCountView;
     @Nullable
     UserImageChange userImageChange;
 
@@ -150,8 +153,7 @@ public final class MainActivity extends StageActivity
 
     Bitmap backgroundBit;
 
-    @SuppressLint("HandlerLeak")
-    Handler handlerB = new Handler() {
+    Handler handlerB = new Handler(Looper.getMainLooper()) {
         @Override
         public void handleMessage(Message msg) {
             int mNextFrame = gifHandler.updateFrame(backgroundBit);
@@ -369,9 +371,17 @@ public final class MainActivity extends StageActivity
 
     @Override
     protected void onCreate2(@Nullable Bundle savedInstanceState) {
+        Intent intent = getIntent();
+        if (intent != null) {
+            boolean res = intent.getBooleanExtra(SplashActivity.KEY_RESTART,false);
+            if (res){
+                savedInstanceState = null;
+            }
+        }
         setContentView(R.layout.activity_main);
 
         mDrawerLayout = (EhDrawerLayout) ViewUtils.$$(this, R.id.draw_view);
+        mDrawerLayout.setDrawerListener(this);
         mNavView = (NavigationView) ViewUtils.$$(this, R.id.nav_view);
         mRightDrawer = (FrameLayout) ViewUtils.$$(this, R.id.right_drawer);
         View headerLayout = mNavView.getHeaderView(0);
@@ -384,17 +394,23 @@ public final class MainActivity extends StageActivity
         mDisplayName = (TextView) ViewUtils.$$(headerLayout, R.id.display_name);
         TextView mChangeTheme = (TextView) ViewUtils.$$(this, R.id.change_theme);
 
+        limitsCountView = (LimitsCountView) ViewUtils.$$(this, R.id.limits_count_view);
+
         mDrawerLayout.setStatusBarColor(ResourcesUtils.getAttrColor(this, androidx.appcompat.R.attr.colorPrimaryDark));
 //        mDrawerLayout.setStatusBarColor(0);
 
         if (mNavView != null) {
+//            if (Settings.isLogin()){
+//                MenuItem newsItem = mNavView.getMenu().findItem(R.id.nav_eh_news);
+//                newsItem.setVisible(true);
+//            }
             mNavView.setNavigationItemSelectedListener(this);
         }
-        if (Settings.getTheme(getApplicationContext()) == 0) {
+        if (Settings.getTheme() == 0) {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_light));
 
             mChangeTheme.setBackgroundColor(getColor(R.color.white));
-        } else if (Settings.getTheme(getApplicationContext()) == 1) {
+        } else if (Settings.getTheme() == 1) {
             mChangeTheme.setTextColor(getColor(R.color.theme_change_other));
             mChangeTheme.setBackgroundColor(getColor(R.color.grey_850));
         } else {
@@ -410,7 +426,6 @@ public final class MainActivity extends StageActivity
 
         if (savedInstanceState == null) {
             onInit();
-            CommonOperations.checkUpdate(this, false);
             checkDownloadLocation();
             if (Settings.getCellularNetworkWarning()) {
                 checkCellularNetwork();
@@ -453,7 +468,7 @@ public final class MainActivity extends StageActivity
 
     private String getThemeText() {
         int resId;
-        switch (Settings.getTheme(getApplicationContext())) {
+        switch (Settings.getTheme()) {
             default:
             case Settings.THEME_LIGHT:
                 resId = R.string.theme_light;
@@ -469,7 +484,7 @@ public final class MainActivity extends StageActivity
     }
 
     private int getNextTheme() {
-        switch (Settings.getTheme(getApplicationContext())) {
+        switch (Settings.getTheme()) {
             default:
             case Settings.THEME_LIGHT:
                 return Settings.THEME_DARK;
@@ -541,7 +556,7 @@ public final class MainActivity extends StageActivity
 
     @Override
     public void onSaveInstanceState(Bundle outState, PersistableBundle outPersistentState) {
-        super.onSaveInstanceState(outState, outPersistentState);
+//        super.onSaveInstanceState(outState, outPersistentState);
         outState.putInt(KEY_NAV_CHECKED_ITEM, mNavCheckedItem);
     }
 
@@ -587,17 +602,20 @@ public final class MainActivity extends StageActivity
 
     private String getTextFromClipboard() {
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboard != null) {
-            ClipData clip = clipboard.getPrimaryClip();
-            if (clip != null && clip.getItemCount() > 0 && clip.getItemAt(0).getText() != null) {
-                return clip.getItemAt(0).getText().toString();
+        try {
+            if (clipboard != null) {
+                ClipData clip = clipboard.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0 && clip.getItemAt(0).getText() != null) {
+                    return clip.getItemAt(0).getText().toString();
+                }
             }
+        } catch (RuntimeException ignore) {
         }
         return null;
     }
 
     @Nullable
-    private Announcer createAnnouncerFromClipboardUrl(String url) {
+    public static Announcer createAnnouncerFromClipboardUrl(String url) {
         GalleryDetailUrlParser.Result result1 = GalleryDetailUrlParser.parse(url, false);
         if (result1 != null) {
             Bundle args = new Bundle();
@@ -717,6 +735,9 @@ public final class MainActivity extends StageActivity
         }
     }
 
+    /**
+     * 更换壁纸
+     */
     public void onBackgroundChange() {
         if (userImageChange != null) {
             userImageChange = null;
@@ -728,9 +749,11 @@ public final class MainActivity extends StageActivity
                 this
         );
         userImageChange.showImageChangeDialog();
-        System.out.println("更换壁纸");
     }
 
+    /**
+     * 更换头像
+     */
     public void onAvatarChange() {
         if (userImageChange != null) {
             userImageChange = null;
@@ -743,16 +766,7 @@ public final class MainActivity extends StageActivity
         );
 
         userImageChange.showImageChangeDialog();
-        System.out.println("更换头像");
     }
-
-    //    public int getDrawerLockMode(int edgeGravity) {
-//        if (mDrawerLayout != null) {
-//            return mDrawerLayout.getDrawerLockMode(edgeGravity);
-//        } else {
-//            return DrawerLayout.LOCK_MODE_UNLOCKED;
-//        }
-//    }
 
     public void setDrawerLockMode(int lockMode, int edgeGravity) {
         if (mDrawerLayout != null) {
@@ -865,7 +879,6 @@ public final class MainActivity extends StageActivity
                         .setArgs(nav_whats_hot));
                 break;
             case R.id.nav_top_lists:
-                System.out.println("打开排行榜");
                 Bundle nav_top_lists = new Bundle();
                 nav_top_lists.putString(EhTopListScene.KEY_ACTION, EhTopListScene.ACTION_TOP_LIST);
                 startSceneFirstly(new Announcer(EhTopListScene.class)
@@ -892,6 +905,9 @@ public final class MainActivity extends StageActivity
             mDrawerLayout.closeDrawers();
         }
 
+        if (limitsCountView != null) {
+            limitsCountView.hide();
+        }
         return true;
     }
 
@@ -911,4 +927,27 @@ public final class MainActivity extends StageActivity
         super.onActivityResult(requestCode, resultCode, data);
     }
 
+    @Override
+    public void onDrawerSlide(View drawerView, float percent) {
+
+    }
+
+    @Override
+    public void onDrawerOpened(View drawerView) {
+        if (limitsCountView != null) {
+            limitsCountView.onLoadData(drawerView, true);
+        }
+    }
+
+    @Override
+    public void onDrawerClosed(View drawerView) {
+        if (limitsCountView != null) {
+            limitsCountView.hide();
+        }
+    }
+
+    @Override
+    public void onDrawerStateChanged(View drawerView, int newState) {
+
+    }
 }

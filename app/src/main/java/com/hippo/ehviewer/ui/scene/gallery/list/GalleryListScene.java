@@ -34,6 +34,7 @@ import android.text.Spannable;
 import android.text.SpannableStringBuilder;
 import android.text.TextUtils;
 import android.text.style.ImageSpan;
+import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -51,7 +52,6 @@ import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.ViewPager;
 
@@ -93,6 +93,7 @@ import com.hippo.ehviewer.client.parser.GalleryPageUrlParser;
 import com.hippo.ehviewer.dao.DownloadInfo;
 import com.hippo.ehviewer.dao.QuickSearch;
 import com.hippo.ehviewer.download.DownloadManager;
+import com.hippo.ehviewer.event.SomethingNeedRefresh;
 import com.hippo.ehviewer.ui.CommonOperations;
 import com.hippo.ehviewer.ui.GalleryActivity;
 import com.hippo.ehviewer.ui.MainActivity;
@@ -103,6 +104,7 @@ import com.hippo.ehviewer.ui.scene.gallery.detail.GalleryDetailScene;
 import com.hippo.ehviewer.ui.scene.ProgressScene;
 import com.hippo.ehviewer.util.TagTranslationUtil;
 import com.hippo.ehviewer.widget.GalleryInfoContentHelper;
+import com.hippo.ehviewer.widget.JumpDateSelector;
 import com.hippo.ehviewer.widget.SearchBar;
 import com.hippo.ehviewer.widget.SearchLayout;
 import com.hippo.refreshlayout.RefreshLayout;
@@ -116,25 +118,33 @@ import com.hippo.widget.ContentLayout;
 import com.hippo.widget.FabLayout;
 import com.hippo.widget.LoadImageViewNew;
 import com.hippo.widget.SearchBarMover;
-import com.hippo.yorozuya.AnimationUtils;
-import com.hippo.yorozuya.AssertUtils;
-import com.hippo.yorozuya.MathUtils;
-import com.hippo.yorozuya.SimpleAnimatorListener;
-import com.hippo.yorozuya.StringUtils;
-import com.hippo.yorozuya.ViewUtils;
+import com.hippo.lib.yorozuya.AnimationUtils;
+import com.hippo.lib.yorozuya.AssertUtils;
+import com.hippo.lib.yorozuya.MathUtils;
+import com.hippo.lib.yorozuya.SimpleAnimatorListener;
+import com.hippo.lib.yorozuya.StringUtils;
+import com.hippo.lib.yorozuya.ViewUtils;
+
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.File;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
 
 public final class GalleryListScene extends BaseScene
         implements EasyRecyclerView.OnItemClickListener, EasyRecyclerView.OnItemLongClickListener,
         SearchBar.Helper, SearchBar.OnStateChangeListener, FastScroller.OnDragHandlerListener,
         SearchLayout.Helper, SearchBarMover.Helper, View.OnClickListener, FabLayout.OnClickFabListener,
         FabLayout.OnExpandListener, SubscriptionCallback {
+
+    private static final String TAG = "GalleryListScene";
 
     @IntDef({STATE_NORMAL, STATE_SIMPLE_SEARCH, STATE_SEARCH, STATE_SEARCH_SHOW_LIST})
     @Retention(RetentionPolicy.SOURCE)
@@ -156,15 +166,16 @@ public final class GalleryListScene extends BaseScene
     public final static String KEY_HAS_FIRST_REFRESH = "has_first_refresh";
     public final static String KEY_STATE = "state";
 
-    private final static int STATE_NORMAL = 0;
-    private final static int STATE_SIMPLE_SEARCH = 1;
-    private final static int STATE_SEARCH = 2;
-    private final static int STATE_SEARCH_SHOW_LIST = 3;
+    final static int STATE_NORMAL = 0;
+    final static int STATE_SIMPLE_SEARCH = 1;
+    final static int STATE_SEARCH = 2;
+    final static int STATE_SEARCH_SHOW_LIST = 3;
 
     private static final long ANIMATE_TIME = 300L;
 
+    private boolean showReadProgress = false;
     private boolean filterOpen = false;
-    private List<String> filterTagList = new ArrayList<>();
+    private final List<String> filterTagList = new ArrayList<>();
 
     /*---------------
      Whole life cycle
@@ -172,7 +183,7 @@ public final class GalleryListScene extends BaseScene
     @Nullable
     private EhClient mClient;
     @Nullable
-    private ListUrlBuilder mUrlBuilder;
+    ListUrlBuilder mUrlBuilder;
 
     /*---------------
      View life cycle
@@ -194,7 +205,7 @@ public final class GalleryListScene extends BaseScene
     @Nullable
     private GalleryListAdapter mAdapter;
     @Nullable
-    private GalleryListHelper mHelper;
+    public GalleryListHelper mHelper;
     @Nullable
     private DrawerArrowDrawable mLeftDrawable;
     @Nullable
@@ -207,14 +218,23 @@ public final class GalleryListScene extends BaseScene
     private PopupWindow popupWindow;
     @Nullable
     private AlertDialog alertDialog;
+    @Nullable
+    private AlertDialog jumpSelectorDialog;
     @NonNull
-    private ViewPager drawPager;
+    ViewPager drawPager;
+    @NonNull
+    private View bookmarksView;
+    @Nullable
+    private View subscriptionView;
 
-    private SubscriptionDraw subscriptionDraw;
+    private JumpDateSelector mJumpDateSelector;
 
     private EhTagDatabase ehTags;
 
-    private GalleryListParser.Result mResult;
+    private ExecutorService executorService;
+
+    private BookmarksDraw mBookmarksDraw;
+    private SubscriptionDraw mSubscriptionDraw;
 
     @Nullable
     private final Animator.AnimatorListener mActionFabAnimatorListener = new SimpleAnimatorListener() {
@@ -268,7 +288,7 @@ public final class GalleryListScene extends BaseScene
     private int popupWindowPosition = -1;
 
     private ShowcaseView mShowcaseView;
-
+    private GalleryListSceneDialog tagDialog;
     private DownloadManager mDownloadManager;
     private DownloadManager.DownloadInfoListener mDownloadInfoListener;
     private FavouriteStatusRouter mFavouriteStatusRouter;
@@ -317,6 +337,7 @@ public final class GalleryListScene extends BaseScene
         }
     }
 
+    @SuppressLint("NotifyDataSetChanged")
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -324,11 +345,13 @@ public final class GalleryListScene extends BaseScene
         Context context = getEHContext();
         assert context != null;
         AssertUtils.assertNotNull(context);
+        executorService = EhApplication.getExecutorService(context);
         mClient = EhApplication.getEhClient(context);
         mDownloadManager = EhApplication.getDownloadManager(context);
         mFavouriteStatusRouter = EhApplication.getFavouriteStatusRouter(context);
 
         mDownloadInfoListener = new DownloadManager.DownloadInfoListener() {
+
             @Override
             public void onAdd(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list, int position) {
                 if (mAdapter != null) {
@@ -337,7 +360,12 @@ public final class GalleryListScene extends BaseScene
             }
 
             @Override
-            public void onUpdate(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list) {
+            public void onReplace(@NonNull DownloadInfo newInfo, @NonNull DownloadInfo oldInfo) {
+
+            }
+
+            @Override
+            public void onUpdate(@NonNull DownloadInfo info, @NonNull List<DownloadInfo> list, LinkedList<DownloadInfo> mWaitList) {
             }
 
             @Override
@@ -381,14 +409,17 @@ public final class GalleryListScene extends BaseScene
             }
         };
         mFavouriteStatusRouter.addListener(mFavouriteStatusRouterListener);
+        if (ehTags==null){
+            ehTags = EhTagDatabase.getInstance(context);
+        }
 
-        ehTags = EhTagDatabase.getInstance(context);
 
         if (savedInstanceState == null) {
             onInit();
         } else {
             onRestore(savedInstanceState);
         }
+        showReadProgress = Settings.getShowReadProgress();
     }
 
     public void onInit() {
@@ -421,11 +452,11 @@ public final class GalleryListScene extends BaseScene
     @Override
     public void onDestroy() {
         super.onDestroy();
-
         mClient = null;
         mUrlBuilder = null;
         mDownloadManager.removeDownloadInfoListener(mDownloadInfoListener);
         mFavouriteStatusRouter.removeListener(mFavouriteStatusRouterListener);
+        EventBus.getDefault().unregister(this);
     }
 
     private void setSearchBarHint(Context context, SearchBar searchBar) {
@@ -512,7 +543,7 @@ public final class GalleryListScene extends BaseScene
     }
 
     // Update search bar title, drawer checked item
-    private void onUpdateUrlBuilder() {
+    void onUpdateUrlBuilder() {
         ListUrlBuilder builder = mUrlBuilder;
         Resources resources = getResources2();
         if (resources == null || builder == null || mSearchLayout == null) {
@@ -611,7 +642,7 @@ public final class GalleryListScene extends BaseScene
         mRecyclerView.setOnItemLongClickListener(this);
         assert mOnScrollListener != null;
         mRecyclerView.addOnScrollListener(mOnScrollListener);
-
+//        mRecyclerView.setOnGenericMotionListener(this::onGenericMotion);
         fastScroller.setPadding(fastScroller.getPaddingLeft(), fastScroller.getPaddingTop() + paddingTopSB,
                 fastScroller.getPaddingRight(), fastScroller.getPaddingBottom());
 
@@ -671,18 +702,17 @@ public final class GalleryListScene extends BaseScene
             return;
         }
 
-        if (popupWindowPosition == position) {
-            popupWindowPosition = -1;
-            assert popupWindow != null;
-            popupWindow.dismiss();
-            return;
-        }
         if (popupWindow != null) {
+            if (popupWindowPosition == position) {
+                popupWindowPosition = -1;
+                popupWindow.dismiss();
+                return;
+            }
             popupWindowPosition = -1;
             popupWindow.dismiss();
         }
 
-        if (gi.tgList == null || gi.tgList.isEmpty()) {
+        if (gi != null && (gi.tgList == null || gi.tgList.isEmpty())) {
             onItemClick(view, gi);
             return;
         }
@@ -742,11 +772,25 @@ public final class GalleryListScene extends BaseScene
                 chip.setText(tagName.split(":")[1]);
             }
             chip.setOnClickListener(l -> onTagClick(tagName));
+            chip.setOnLongClickListener(l -> onTagLongClick(tagName));
             tagFlowLayout.addView(chip, i);
         }
 
         return tagFlowLayout;
     }
+
+    private boolean onTagLongClick(String tagName) {
+        if (tagDialog==null){
+            tagDialog = new GalleryListSceneDialog(this);
+        }
+        if (ehTags==null){
+            ehTags = EhTagDatabase.getInstance(getContext());
+        }
+        tagDialog.setTagName(tagName);
+        tagDialog.showTagLongPressDialog(ehTags);
+        return true;
+    }
+
 
     private void onTagClick(String tagName) {
         if (isDrawersVisible()) {
@@ -873,8 +917,8 @@ public final class GalleryListScene extends BaseScene
         mActionFabDrawable = null;
     }
 
-    private void showQuickSearchTipDialog(final List<QuickSearch> list,
-                                          final ArrayAdapter<QuickSearch> adapter, final ListView listView, final TextView tip) {
+    void showQuickSearchTipDialog(final List<QuickSearch> list,
+                                  final ArrayAdapter<QuickSearch> adapter, final ListView listView, final TextView tip) {
         Context context = getEHContext();
         if (null == context) {
             return;
@@ -890,8 +934,12 @@ public final class GalleryListScene extends BaseScene
         }).show();
     }
 
-    private void showAddQuickSearchDialog(final List<QuickSearch> list,
-                                          final ArrayAdapter<QuickSearch> adapter, final ListView listView, final TextView tip) {
+    void showAddQuickSearchDialog(final List<QuickSearch> list,
+                                  final ArrayAdapter<QuickSearch> adapter, final ListView listView, final TextView tip) {
+        boolean translation = Settings.getShowTagTranslations();
+//        if (translation){
+//            String translationString = getTagCN();
+//        }
         Context context = getEHContext();
         final ListUrlBuilder urlBuilder = mUrlBuilder;
         if (null == context || null == urlBuilder) {
@@ -939,14 +987,29 @@ public final class GalleryListScene extends BaseScene
             QuickSearch quickSearch = urlBuilder.toQuickSearch();
 
             //汉化or不汉化
-            if (Settings.getShowTagTranslations()) {
+            if (translation) {
                 if (ehTags == null) {
                     ehTags = EhTagDatabase.getInstance(context);
                 }
                 //根据‘：’分割字符串为组名和标签名
-                String[] tags = text.split(":");
-
-                quickSearch.name = TagTranslationUtil.getTagCN(tags, ehTags);
+                //String[] tags = text.split(":");
+                //quickSearch.name = TagTranslationUtil.getTagCN(tags, ehTags);
+//                String[] parts = text.split("(?=(?:(?:[^\"]*\"){2})*[^\"]*$)\\s+");
+                String[] parts = text.split("  ");
+                StringBuilder newText = new StringBuilder();
+                for (String part : parts) {
+                    String[] tags = part.split(":");
+                    for (int j = 0; j < tags.length; j++) {
+                        tags[j] = tags[j].replace("\"", "").replace("$", "");
+                    }
+                    String trans = TagTranslationUtil.getTagCN(tags, ehTags);
+                    if (newText.length()==0) {
+                        newText.append(trans);
+                    } else {
+                        newText.append("  ").append(trans);
+                    }
+                }
+                quickSearch.name = newText.toString();
             } else {
                 quickSearch.name = text;
             }
@@ -973,8 +1036,8 @@ public final class GalleryListScene extends BaseScene
 
         drawPager = view.findViewById(R.id.drawer_list_pager);
 
-        View bookmarksView = bookmarksViewBuild(inflater);
-        View subscriptionView = subscriptionViewBuild(inflater);
+        bookmarksView = bookmarksViewBuild(inflater);
+        subscriptionView = subscriptionViewBuild(inflater);
 
         List<View> views = new ArrayList<>();
 
@@ -990,102 +1053,24 @@ public final class GalleryListScene extends BaseScene
 
     @SuppressLint({"RtlHardcoded", "NonConstantResourceId"})
     private View bookmarksViewBuild(LayoutInflater inflater) {
-
-        View bookmarksView = inflater.inflate(R.layout.bookmarks_draw, null, false);
-
-        Toolbar toolbar = (Toolbar) ViewUtils.$$(bookmarksView, R.id.toolbar);
-        final TextView tip = (TextView) ViewUtils.$$(bookmarksView, R.id.tip);
-        final ListView listView = (ListView) ViewUtils.$$(bookmarksView, R.id.list_view);
-
         Context context = getEHContext();
-        assert context != null;
-        AssertUtils.assertNotNull(context);
-
-        List<QuickSearch> quickSearchList = EhDB.getAllQuickSearch();
-        //汉化标签
-        final boolean judge = Settings.getShowTagTranslations();
-        if (judge && 0 != quickSearchList.size()) {
-            if (ehTags == null) {
-                ehTags = EhTagDatabase.getInstance(getContext());
-            }
-            for (int i = 0; i < quickSearchList.size(); i++) {
-                String name = quickSearchList.get(i).getName();
-                //重设标签名称,并跳过已翻译的标签
-                if (name != null && 2 == name.split(":").length) {
-                    quickSearchList.get(i).setName(TagTranslationUtil.getTagCN(name.split(":"), ehTags));
-                    EhDB.updateQuickSearch(quickSearchList.get(i));
-                }
-            }
-        } else if (!judge && 0 != quickSearchList.size()) {
-            for (int i = 0; i < quickSearchList.size(); i++) {
-                String name = quickSearchList.get(i).getName();
-                //重设标签名称,并跳过未翻译的标签
-                if (null != name && 1 == name.split(":").length) {
-                    quickSearchList.get(i).setName(quickSearchList.get(i).getKeyword());
-                    EhDB.updateQuickSearch(quickSearchList.get(i));
-                }
-            }
+        if (context == null) {
+            return new View(null);
         }
-
-
-        final List<QuickSearch> list = quickSearchList;
-
-        final ArrayAdapter<QuickSearch> adapter = new ArrayAdapter<>(context, R.layout.item_simple_list, list);
-        listView.setAdapter(adapter);
-        //快速搜索点击tag事件监听
-        listView.setOnItemClickListener((parent, view1, position, id) -> {
-            if (null == mHelper || null == mUrlBuilder) {
-                return;
-            }
-
-            mUrlBuilder.set(list.get(position));
-            mUrlBuilder.setPageIndex(0);
-            onUpdateUrlBuilder();
-            mHelper.refresh();
-            setState(STATE_NORMAL);
-            closeDrawer(Gravity.RIGHT);
-        });
-
-        tip.setText(R.string.quick_search_tip);
-        toolbar.setLogo(R.drawable.ic_baseline_bookmarks_24);
-        toolbar.setTitle(R.string.quick_search);
-        toolbar.inflateMenu(R.menu.drawer_gallery_list);
-        toolbar.setOnMenuItemClickListener(item -> {  //点击增加快速搜索按钮触发
-            int id = item.getItemId();
-            switch (id) {
-                case R.id.action_add:
-                    if (Settings.getQuickSearchTip()) {
-                        showQuickSearchTipDialog(list, adapter, listView, tip);
-                    } else {
-                        showAddQuickSearchDialog(list, adapter, listView, tip);
-                    }
-                    break;
-                case R.id.action_settings:
-                    startScene(new Announcer(QuickSearchScene.class));
-                    break;
-            }
-            return true;
-        });
-
-        if (0 == list.size()) {
-            tip.setVisibility(View.VISIBLE);
-            listView.setVisibility(View.GONE);
-        } else {
-            tip.setVisibility(View.GONE);
-            listView.setVisibility(View.VISIBLE);
-        }
-
-        toolbar.setOnClickListener(l -> {
-            drawPager.setCurrentItem(1);
-        });
-
-
-        return bookmarksView;
+        mBookmarksDraw = new BookmarksDraw(getEHContext(), inflater, ehTags);
+        return mBookmarksDraw.onCreate(this);
     }
 
     private View subscriptionViewBuild(LayoutInflater inflater) {
-        subscriptionDraw = new SubscriptionDraw(getEHContext(), inflater, mClient, getTag(), ehTags);
-        return subscriptionDraw.onCreate(drawPager, getActivity2(), this);
+        mSubscriptionDraw = new SubscriptionDraw(getEHContext(), inflater, mClient, getTag(), ehTags);
+        return mSubscriptionDraw.onCreate(drawPager, getActivity2(), this);
+    }
+    @Override
+    public void setTagList(UserTagList tagList) {
+        if (mSubscriptionDraw==null){
+            return;
+        }
+         mSubscriptionDraw.setUserTagList(tagList);
     }
 
     @Override
@@ -1124,6 +1109,29 @@ public final class GalleryListScene extends BaseScene
         return getSuitableTitleForUrlBuilder(getEHContext().getResources(), urlBuilder, false);
     }
 
+    /**
+     * eventBus 通知书签数据修改
+     */
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onQuickSearchDataChanged(SomethingNeedRefresh refresh) {
+        if (!refresh.isBookmarkDrawNeed()) {
+            return;
+        }
+        LayoutInflater inflater = getLayoutInflater();
+        bookmarksView = bookmarksViewBuild(inflater);
+        if (subscriptionView == null) {
+            subscriptionView = subscriptionViewBuild(inflater);
+        }
+        List<View> views = new ArrayList<>();
+
+        views.add(bookmarksView);
+        views.add(subscriptionView);
+
+        DrawViewPagerAdapter pagerAdapter = new DrawViewPagerAdapter(views);
+
+        drawPager.setAdapter(pagerAdapter);
+    }
+
     private boolean checkDoubleClickExit() {
         if (getStackIndex() != 0) {
             return false;
@@ -1140,8 +1148,25 @@ public final class GalleryListScene extends BaseScene
         }
     }
 
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (mBookmarksDraw == null) {
+            return;
+        }
+        mBookmarksDraw.resume();
+        if (mSubscriptionDraw == null) {
+            return;
+        }
+        mSubscriptionDraw.resume();
+    }
+
     @Override
     public void onBackPressed() {
+        if (popupWindow != null) {
+            popupWindow.dismiss();
+        }
         if (null != mShowcaseView) {
             return;
         }
@@ -1206,7 +1231,7 @@ public final class GalleryListScene extends BaseScene
         args.putParcelable(GalleryDetailScene.KEY_GALLERY_INFO, gi);
         Announcer announcer = new Announcer(GalleryDetailScene.class).setArgs(args);
         View thumb;
-        if (null != (thumb = view.findViewById(R.id.thumb))) {
+        if (null != view && null != (thumb = view.findViewById(R.id.thumb))) {
             announcer.setTranHelper(new EnterGalleryDetailTransaction(thumb));
         }
         startScene(announcer);
@@ -1294,7 +1319,7 @@ public final class GalleryListScene extends BaseScene
                             if (favourited) {
                                 CommonOperations.removeFromFavorites(activity, gi, new RemoveFromFavoriteListener(context, activity.getStageId(), getTag()));
                             } else {
-                                CommonOperations.addToFavorites(activity, gi, new AddToFavoriteListener(context, activity.getStageId(), getTag()));
+                                CommonOperations.addToFavorites(activity, gi, new AddToFavoriteListener(context, activity.getStageId(), getTag()), false);
                             }
                             break;
                     }
@@ -1325,11 +1350,33 @@ public final class GalleryListScene extends BaseScene
             return;
         }
 
-        if (mResult.pages<0||mResult.nextPage<0){
-            Toast.makeText(context,R.string.gallery_list_can_not_jump,Toast.LENGTH_LONG).show();
+        if (mHelper.mPages < 0) {
+            showDateJumpDialog(context);
+        } else {
+            showPageJumpDialog(context);
+        }
+    }
+
+    private void showDateJumpDialog(Context context) {
+        if (mHelper == null) {
             return;
         }
+        if (mHelper.nextHref == null || mHelper.nextHref.isEmpty()) {
+//            if ((mHelper.nextHref == null || mHelper.nextHref.isEmpty())&&(mHelper.prevHref == null || mHelper.prevHref.isEmpty())) {
+            Toast.makeText(getEHContext(), R.string.gallery_list_no_more_data, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (jumpSelectorDialog == null) {
+            LinearLayout linearLayout = (LinearLayout) getLayoutInflater().inflate(R.layout.gallery_list_date_jump_dialog, null);
+            mJumpDateSelector = linearLayout.findViewById(R.id.gallery_list_jump_date);
+            mJumpDateSelector.setOnTimeSelectedListener(this::onTimeSelected);
+            jumpSelectorDialog = new AlertDialog.Builder(context).setView(linearLayout).create();
+        }
+        mJumpDateSelector.setFoundMessage(mHelper.resultCount);
+        jumpSelectorDialog.show();
+    }
 
+    private void showPageJumpDialog(Context context) {
         final int page = mHelper.getPageForTop();
         final int pages = mHelper.getPages();
         String hint = getString(R.string.go_to_hint, page + 1, pages);
@@ -1363,6 +1410,16 @@ public final class GalleryListScene extends BaseScene
         });
     }
 
+    private void onTimeSelected(String urlAppend) {
+        Log.d(TAG, urlAppend);
+        if (urlAppend.isEmpty() || mHelper == null || jumpSelectorDialog == null || mUrlBuilder == null) {
+            return;
+        }
+        jumpSelectorDialog.dismiss();
+        mHelper.nextHref = mUrlBuilder.jumpHrefBuild(mHelper.nextHref, urlAppend);
+        mHelper.goTo(-996);
+    }
+
     @Override
     public void onClickSecondaryFab(FabLayout view, FloatingActionButton fab, int position) {
         if (null == mHelper) {
@@ -1376,11 +1433,20 @@ public final class GalleryListScene extends BaseScene
                 break;
             case 1: // Go to
                 if (mHelper.canGoTo()) {
+                    if (mUrlBuilder != null && mUrlBuilder.getMode() == ListUrlBuilder.MODE_TOP_LIST)
+                        break;
                     showGoToDialog();
                 }
                 break;
             case 2: // Refresh
                 mHelper.refresh();
+                break;
+            case 3:
+                List<GalleryInfo> gInfoL = mHelper.getData();
+                if (gInfoL == null || gInfoL.isEmpty()) {
+                    return;
+                }
+                onItemClick(null, gInfoL.get((int) (Math.random() * gInfoL.size())));
                 break;
         }
 
@@ -1393,9 +1459,7 @@ public final class GalleryListScene extends BaseScene
         }
         if (!open) {
             mFloatingActionButton.setImageResource(R.drawable.ic_baseline_filter_none_24);
-            if (null != filterTagList) {
-                filterTagList.clear();
-            }
+            filterTagList.clear();
             return;
         }
 
@@ -1548,7 +1612,7 @@ public final class GalleryListScene extends BaseScene
         }
     }
 
-    private void setState(@State int state) {
+    void setState(@State int state) {
         setState(state, true);
     }
 
@@ -1826,14 +1890,14 @@ public final class GalleryListScene extends BaseScene
     }
 
     private void onGetGalleryListSuccess(GalleryListParser.Result result, int taskId) {
-        mResult = result;
         if (mHelper != null && mSearchBarMover != null &&
                 mHelper.isCurrentTask(taskId)) {
             String emptyString = getResources2().getString(mUrlBuilder.getMode() == ListUrlBuilder.MODE_SUBSCRIPTION && result.noWatchedTags
                     ? R.string.gallery_list_empty_hit_subscription
                     : R.string.gallery_list_empty_hit);
             mHelper.setEmptyString(emptyString);
-            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
+//            mHelper.onGetPageData(taskId, result.pages, result.nextPage, result.galleryInfoList);
+            mHelper.onGetPageData(taskId, result, result.galleryInfoList);
         }
     }
 
@@ -1931,7 +1995,7 @@ public final class GalleryListScene extends BaseScene
 
         public GalleryListAdapter(@NonNull LayoutInflater inflater,
                                   @NonNull Resources resources, @NonNull RecyclerView recyclerView, int type) {
-            super(inflater, resources, recyclerView, type, true);
+            super(inflater, resources, recyclerView, type, true, executorService, showReadProgress);
         }
 
         @Override
@@ -1947,7 +2011,7 @@ public final class GalleryListScene extends BaseScene
 
     }
 
-    private class GalleryListHelper extends GalleryInfoContentHelper {
+    class GalleryListHelper extends GalleryInfoContentHelper {
 
         @Override
         protected void getPageData(int taskId, int type, int page) {
@@ -1972,9 +2036,14 @@ public final class GalleryListScene extends BaseScene
                 request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
                 request.setCallback(new GetGalleryListListener(getContext(),
                         activity.getStageId(), getTag(), taskId));
-                request.setArgs(url);
+                request.setArgs(url, mUrlBuilder.getMode());
                 mClient.execute(request);
             }
+        }
+
+        @Override
+        protected void getPageData(int taskId, int type, int page, String append) {
+            // empty
         }
 
         @Override
@@ -1984,10 +2053,10 @@ public final class GalleryListScene extends BaseScene
                 return;
             }
             mUrlBuilder.setPageIndex(page);
-            String url = mUrlBuilder.build(pageAction, mResult);
-            if (url.isEmpty()) {
+            String url = mUrlBuilder.build(pageAction, mHelper);
+            if (url == null || url.isEmpty()) {
                 Toast.makeText(getContext(), R.string.gallery_list_action_url_missed, Toast.LENGTH_LONG).show();
-                if (mHelper!=null){
+                if (mHelper != null) {
                     mHelper.cancelCurrentTask();
                 }
                 return;
@@ -1996,7 +2065,7 @@ public final class GalleryListScene extends BaseScene
             request.setMethod(EhClient.METHOD_GET_GALLERY_LIST);
             request.setCallback(new GetGalleryListListener(getContext(),
                     activity.getStageId(), getTag(), taskId));
-            request.setArgs(url);
+            request.setArgs(url, mUrlBuilder.getMode());
             mClient.execute(request);
         }
 
@@ -2006,6 +2075,7 @@ public final class GalleryListScene extends BaseScene
             return GalleryListScene.this.getEHContext();
         }
 
+        @SuppressLint("NotifyDataSetChanged")
         @Override
         protected void notifyDataSetChanged() {
             if (null != mAdapter) {

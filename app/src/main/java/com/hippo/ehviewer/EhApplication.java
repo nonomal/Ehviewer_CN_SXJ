@@ -28,41 +28,48 @@ import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Debug;
+import android.text.method.LinkMovementMethod;
 import android.util.Log;
+import android.view.View;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.collection.LruCache;
 
+import com.hippo.Native;
+//import com.gu.toolargetool.TooLargeTool;
 import com.hippo.a7zip.A7Zip;
 import com.hippo.beerbelly.SimpleDiskCache;
 import com.hippo.conaco.Conaco;
 import com.hippo.content.RecordingApplication;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhCookieStore;
-import com.hippo.ehviewer.client.EhDns;
+import com.hippo.ehviewer.client.EhHosts;
 import com.hippo.ehviewer.client.EhEngine;
+import com.hippo.ehviewer.client.data.EhNewsDetail;
 import com.hippo.ehviewer.client.data.GalleryDetail;
 import com.hippo.ehviewer.client.data.userTag.UserTagList;
 import com.hippo.ehviewer.download.DownloadManager;
 import com.hippo.ehviewer.spider.SpiderDen;
 import com.hippo.ehviewer.ui.CommonOperations;
-import com.hippo.image.Image;
-import com.hippo.image.ImageBitmap;
+import com.hippo.lib.image.Image;
 import com.hippo.network.EhSSLSocketFactory;
 import com.hippo.network.EhSSLSocketFactoryLowSDK;
 import com.hippo.network.EhX509TrustManager;
 import com.hippo.network.StatusCodeException;
 import com.hippo.text.Html;
 import com.hippo.unifile.UniFile;
+import com.hippo.util.AppHelper;
 import com.hippo.util.BitmapUtils;
 import com.hippo.util.ExceptionUtils;
 import com.hippo.util.IoThreadPoolExecutor;
 import com.hippo.util.ReadableTime;
-import com.hippo.yorozuya.FileUtils;
-import com.hippo.yorozuya.IntIdGenerator;
-import com.hippo.yorozuya.OSUtils;
-import com.hippo.yorozuya.SimpleHandler;
+import com.hippo.lib.yorozuya.FileUtils;
+import com.hippo.lib.yorozuya.IntIdGenerator;
+import com.hippo.lib.yorozuya.OSUtils;
+import com.hippo.lib.yorozuya.SimpleHandler;
 
 import org.conscrypt.Conscrypt;
 
@@ -74,6 +81,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.SSLContext;
@@ -101,6 +110,9 @@ public class EhApplication extends RecordingApplication {
 
     private final IntIdGenerator mIdGenerator = new IntIdGenerator();
     private final HashMap<Integer, Object> mGlobalStuffMap = new HashMap<>();
+
+    private final HashMap<String, Object> mTempCacheMap = new HashMap<>();
+
     private EhCookieStore mEhCookieStore;
     private EhClient mEhClient;
     private EhProxySelector mEhProxySelector;
@@ -108,7 +120,7 @@ public class EhApplication extends RecordingApplication {
     private OkHttpClient mImageOkHttpClient;
     private Cache mOkHttpCache;
     private ImageBitmapHelper mImageBitmapHelper;
-    private Conaco<ImageBitmap> mConaco;
+    private Conaco<Image> mConaco;
     private LruCache<Long, GalleryDetail> mGalleryDetailCache;
     private SimpleDiskCache mSpiderInfoCache;
     private DownloadManager mDownloadManager;
@@ -116,12 +128,16 @@ public class EhApplication extends RecordingApplication {
     private FavouriteStatusRouter mFavouriteStatusRouter;
     @Nullable
     private UserTagList userTagList;
+    @Nullable
+    private EhNewsDetail ehNewsDetail;
 
     private final List<Activity> mActivityList = new ArrayList<>();
 
-    private List<String> torrentList = new ArrayList<>();
+    private final List<String> torrentList = new ArrayList<>();
 
     private boolean initialized = false;
+
+    private final ExecutorService executorService = Executors.newCachedThreadPool();
 
     public static EhApplication getInstance() {
         return instance;
@@ -148,6 +164,9 @@ public class EhApplication extends RecordingApplication {
         });
 
         super.onCreate();
+//        if(BuildConfig.DEBUG){
+//            TooLargeTool.startLogging(this);
+//        }
 
         GetText.initialize(this);
         StatusCodeException.initialize(this);
@@ -160,6 +179,7 @@ public class EhApplication extends RecordingApplication {
         EhEngine.initialize();
         BitmapUtils.initialize(this);
         Image.initialize(this);
+        Native.initialize();
         // 实际作用不确定，但是与64位应用有冲突
 //        A7Zip.loadLibrary(A7ZipExtractLite.LIBRARY, libname -> ReLinker.loadLibrary(EhApplication.this, libname));
         // 64位适配
@@ -233,6 +253,10 @@ public class EhApplication extends RecordingApplication {
         CommonOperations.ensureNoMediaFile(UniFile.fromFile(AppConfig.getExternalTempDir()));
     }
 
+    public EhCookieStore getmEhCookieStore() {
+        return mEhCookieStore;
+    }
+
     private void update() {
         int version = Settings.getVersionCode();
         if (version < 52) {
@@ -266,9 +290,6 @@ public class EhApplication extends RecordingApplication {
                     Log.i(TAG, "Native memory: " + FileUtils.humanReadableByteCount(
                             Debug.getNativeHeapAllocatedSize(), false));
                 }
-                if (DEBUG_PRINT_IMAGE_COUNT) {
-                    Log.i(TAG, "Image count: " + Image.getImageCount());
-                }
                 SimpleHandler.getInstance().postDelayed(this, DEBUG_PRINT_INTERVAL);
             }
         }.run();
@@ -291,6 +312,23 @@ public class EhApplication extends RecordingApplication {
 
     public Object removeGlobalStuff(int id) {
         return mGlobalStuffMap.remove(id);
+    }
+
+    public String putTempCache(@NonNull String key,@NonNull Object o) {
+        mTempCacheMap.put(key, o);
+        return key;
+    }
+
+    public boolean containTempCache(@NonNull String key) {
+        return mTempCacheMap.containsKey(key);
+    }
+
+    public Object getTempCache(@NonNull String key) {
+        return mTempCacheMap.get(key);
+    }
+
+    public Object removeTempCache(@NonNull String key) {
+        return mTempCacheMap.remove(key);
     }
 
     public void removeGlobalStuff(Object o) {
@@ -327,6 +365,8 @@ public class EhApplication extends RecordingApplication {
     public static OkHttpClient getOkHttpClient(@NonNull Context context) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mOkHttpClient == null) {
+//            Dispatcher dispatcher = new Dispatcher();
+//            dispatcher.setMaxRequestsPerHost(4);
             OkHttpClient.Builder builder = new OkHttpClient.Builder()
                     .connectTimeout(10, TimeUnit.SECONDS)
                     .readTimeout(10, TimeUnit.SECONDS)
@@ -335,7 +375,8 @@ public class EhApplication extends RecordingApplication {
                     .cookieJar(getEhCookieStore(application))
                     .cache(getOkHttpCache(application))
 //                    .hostnameVerifier((hostname, session) -> true)
-                    .dns(new EhDns(application))
+//                    .dispatcher(dispatcher)
+                    .dns(new EhHosts(application))
                     .addNetworkInterceptor(sprocket -> {
                         try {
                             return sprocket.proceed(sprocket.request());
@@ -344,7 +385,7 @@ public class EhApplication extends RecordingApplication {
                         }
                     })
                     .proxySelector(getEhProxySelector(application));
-            if (Settings.getDF()) {
+            if (Settings.getDF() && AppHelper.checkVPN(context)) {
                 if (Build.VERSION.SDK_INT < 29) {
                     Security.insertProviderAt(Conscrypt.newProvider(), 1);
                     builder.connectionSpecs(Collections.singletonList(ConnectionSpec.MODERN_TLS));
@@ -394,16 +435,24 @@ public class EhApplication extends RecordingApplication {
         if (application.mImageOkHttpClient == null) {
             OkHttpClient.Builder builder = new OkHttpClient.Builder()
                     .followRedirects(false)
-                    .connectTimeout(30, TimeUnit.SECONDS)
-                    .readTimeout(30, TimeUnit.SECONDS)
-                    .writeTimeout(30, TimeUnit.SECONDS)
-                    .callTimeout(30, TimeUnit.SECONDS)
+                    .followSslRedirects(false)
+                    .connectTimeout(20, TimeUnit.SECONDS)
+                    .readTimeout(20, TimeUnit.SECONDS)
+                    .writeTimeout(20, TimeUnit.SECONDS)
+                    .callTimeout(20, TimeUnit.SECONDS)
                     .cookieJar(getEhCookieStore(application))
                     .cache(getOkHttpCache(application))
-                    .hostnameVerifier((hostname, session) -> true)
-                    .dns(new EhDns(application))
+//                    .hostnameVerifier((hostname, session) -> true)
+                    .dns(new EhHosts(application))
+                    .addNetworkInterceptor(sprocket -> {
+                        try {
+                            return sprocket.proceed(sprocket.request());
+                        } catch (NullPointerException e) {
+                            throw new NullPointerException(e.getMessage());
+                        }
+                    })
                     .proxySelector(getEhProxySelector(application));
-            if (Settings.getDF()) {
+            if (Settings.getDF() && AppHelper.checkVPN(context)) {
                 if (Build.VERSION.SDK_INT < 29) {
                     Security.insertProviderAt(Conscrypt.newProvider(), 1);
                     builder.connectionSpecs(Collections.singletonList(ConnectionSpec.MODERN_TLS));
@@ -460,16 +509,17 @@ public class EhApplication extends RecordingApplication {
     }
 
     @NonNull
-    public static Conaco<ImageBitmap> getConaco(@NonNull Context context) {
+    public static Conaco<Image> getConaco(@NonNull Context context) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         if (application.mConaco == null) {
-            Conaco.Builder<ImageBitmap> builder = new Conaco.Builder<>();
+            Conaco.Builder<Image> builder = new Conaco.Builder<>();
             builder.hasMemoryCache = true;
             builder.memoryCacheMaxSize = getMemoryCacheMaxSize();
             builder.hasDiskCache = true;
             builder.diskCacheDir = new File(context.getCacheDir(), "thumb");
             builder.diskCacheMaxSize = 320 * 1024 * 1024; // 320MB
             builder.okHttpClient = getOkHttpClient(context);
+//            builder.okHttpClient = getImageOkHttpClient(context);
             builder.objectHelper = getImageBitmapHelper(context);
             builder.debug = DEBUG_CONACO;
             application.mConaco = builder.build();
@@ -543,7 +593,7 @@ public class EhApplication extends RecordingApplication {
 
     @NonNull
     public static String getDeveloperEmail() {
-        return "ehviewersu$gmail.com".replace('$', '@');
+        return "xiaojieonly$foxmail.com".replace('$', '@');
     }
 
     public void registerActivity(Activity activity) {
@@ -604,10 +654,10 @@ public class EhApplication extends RecordingApplication {
         }
     }
 
-    public static boolean addDownloadTorrent(@NonNull Context context,String url){
+    public static boolean addDownloadTorrent(@NonNull Context context, String url) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
 
-        if (application.torrentList.contains(url)){
+        if (application.torrentList.contains(url)) {
             return false;
         }
 
@@ -615,7 +665,7 @@ public class EhApplication extends RecordingApplication {
         return true;
     }
 
-    public static void removeDownloadTorrent(@NonNull Context context, String url){
+    public static void removeDownloadTorrent(@NonNull Context context, String url) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
 
         application.torrentList.remove(url);
@@ -623,22 +673,69 @@ public class EhApplication extends RecordingApplication {
 
     /**
      * 将用户订阅标签列表存入内存缓存
-     * @param context
-     * @param userTagList
+     *
      */
-    public static void saveUserTagList(@NonNull Context context,UserTagList userTagList){
+    public static void saveUserTagList(@NonNull Context context, UserTagList userTagList) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         application.userTagList = userTagList;
     }
 
     /**
      * 从内存缓存中获取用户订阅标签列表
-     * @param context
-     * @return
+     *
      */
-    public static UserTagList getUserTagList(@NonNull Context context){
+    public static UserTagList getUserTagList(@NonNull Context context) {
         EhApplication application = ((EhApplication) context.getApplicationContext());
         return application.userTagList;
+    }
+
+    public void showEventPane(String html){
+        if (!Settings.getShowEhEvents()){
+            return;
+        }
+        if (html==null){
+            return;
+        }
+        Activity activity = getTopActivity();
+        if (activity != null) {
+            activity.runOnUiThread(() -> {
+                AlertDialog dialog = new AlertDialog.Builder(activity)
+                        .setMessage(Html.fromHtml(html))
+                        .setPositiveButton(android.R.string.ok, null)
+                        .create();
+                dialog.setOnShowListener(d -> {
+                    final View messageView = dialog.findViewById(android.R.id.message);
+                    if (messageView instanceof TextView) {
+                        ((TextView) messageView).setMovementMethod(LinkMovementMethod.getInstance());
+                    }
+                });
+                try {
+                    dialog.show();
+                } catch (Throwable t) {
+                    // ignore
+                }
+            });
+        }
+    }
+
+    /**
+     * 显示eh事件
+     *
+     */
+    public void showEventPane(EhNewsDetail result) {
+        ehNewsDetail = result;
+        String html = result.getEventPane();
+        showEventPane(html);
+    }
+
+    @Nullable
+    public EhNewsDetail getEhNewsDetail(){
+        return ehNewsDetail;
+    }
+
+    public static ExecutorService getExecutorService(@NonNull Context context){
+        EhApplication application = ((EhApplication) context.getApplicationContext());
+        return  application.executorService;
     }
 
 }

@@ -27,14 +27,17 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+
 import androidx.annotation.IdRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 import androidx.annotation.StyleRes;
 import androidx.fragment.app.FragmentActivity;
+
 import com.hippo.drawerlayout.DrawerLayout;
 import com.hippo.ehviewer.Analytics;
+import com.hippo.ehviewer.client.data.userTag.UserTagList;
 import com.hippo.ehviewer.ui.MainActivity;
 import com.hippo.scene.SceneFragment;
 import com.hippo.util.AppHelper;
@@ -45,7 +48,7 @@ public abstract class BaseScene extends SceneFragment {
     public static final int LENGTH_LONG = 1;
 
     public static final String KEY_DRAWER_VIEW_STATE =
-        "com.hippo.ehviewer.ui.scene.BaseScene:DRAWER_VIEW_STATE";
+            "com.hippo.ehviewer.ui.scene.BaseScene:DRAWER_VIEW_STATE";
 
     private Context mThemeContext;
 
@@ -161,7 +164,7 @@ public abstract class BaseScene extends SceneFragment {
     }
 
     public final View createDrawerView(LayoutInflater inflater,
-        @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+                                       @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         drawerView = onCreateDrawerView(inflater, container, savedInstanceState);
 
         if (drawerView != null) {
@@ -178,7 +181,7 @@ public abstract class BaseScene extends SceneFragment {
     }
 
     public View onCreateDrawerView(LayoutInflater inflater,
-            @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+                                   @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         return null;
     }
 
@@ -205,7 +208,7 @@ public abstract class BaseScene extends SceneFragment {
 
     @Nullable
     public View onCreateView2(LayoutInflater inflater,
-            @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+                              @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         return null;
     }
 
@@ -263,8 +266,14 @@ public abstract class BaseScene extends SceneFragment {
 
     @NonNull
     public LayoutInflater getLayoutInflater2() {
-        LayoutInflater layoutInflater = LayoutInflater.from(getEHContext());
-        assert (null != layoutInflater);
+        Context context = getEHContext();
+        if (context == null) {
+            context = getContext();
+        }
+        LayoutInflater layoutInflater = LayoutInflater.from(context);
+        if (layoutInflater == null) {
+            layoutInflater = getLayoutInflater();
+        }
         return layoutInflater;
     }
 
@@ -278,7 +287,7 @@ public abstract class BaseScene extends SceneFragment {
     public void showSoftInput(@Nullable View view) {
         FragmentActivity activity = getActivity();
         if (null != activity && null != view) {
-            AppHelper.showSoftInput(activity, view);
+            AppHelper.showSoftInput(activity, view,true);
         }
     }
 
@@ -298,4 +307,29 @@ public abstract class BaseScene extends SceneFragment {
             outState.putSparseParcelableArray(KEY_DRAWER_VIEW_STATE, drawerViewState);
         }
     }
+
+    public void setTagList(UserTagList result){}
+
+//    public boolean onGenericMotion(View view, MotionEvent motionEvent) {
+//        if (motionEvent.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
+//            if (motionEvent.getAction() == MotionEvent.ACTION_SCROLL) {
+//                float scrollX = motionEvent.getAxisValue(MotionEvent.AXIS_HSCROLL);
+//                float scrollY = motionEvent.getAxisValue(MotionEvent.AXIS_VSCROLL);
+//                int x = view.getScrollX();
+//                int y = view.getScrollY();
+//                int toX = x + Math.round(scrollX);
+//                int toY = y + Math.round(scrollY);
+//                if (toX == view.getWidth()) {
+//                    toX = view.getWidth();
+//                }
+//                if (toY == view.getHeight()) {
+//                    toY = view.getHeight();
+//                }
+//                view.scrollTo(toX, toY);
+//                Log.d("MA", "Mouse scrolled " + scrollX + ", " + scrollY);
+//                return true;
+//            }
+//        }
+//        return false;
+//    }
 }

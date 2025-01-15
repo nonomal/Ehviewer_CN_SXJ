@@ -16,13 +16,14 @@
 
 package com.hippo.ehviewer.widget;
 
+import static com.hippo.ehviewer.client.EhTagDatabase.NAMESPACE_TO_PREFIX;
+
 import android.animation.Animator;
 import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.text.Editable;
@@ -49,10 +50,10 @@ import com.hippo.ehviewer.R;
 import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.client.EhTagDatabase;
 import com.hippo.view.ViewTransition;
-import com.hippo.yorozuya.AnimationUtils;
-import com.hippo.yorozuya.MathUtils;
-import com.hippo.yorozuya.SimpleAnimatorListener;
-import com.hippo.yorozuya.ViewUtils;
+import com.hippo.lib.yorozuya.AnimationUtils;
+import com.hippo.lib.yorozuya.MathUtils;
+import com.hippo.lib.yorozuya.SimpleAnimatorListener;
+import com.hippo.lib.yorozuya.ViewUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -101,6 +102,8 @@ public class SearchBar extends CardView implements View.OnClickListener,
     private boolean mInAnimation;
 
     private boolean showTranslation;
+
+    private boolean isComeFromDownload = false;
 
     public SearchBar(Context context) {
         super(context);
@@ -188,17 +191,33 @@ public class SearchBar extends CardView implements View.OnClickListener,
         }
 
         EhTagDatabase ehTagDatabase = EhTagDatabase.getInstance(getContext());
-        if (!TextUtils.isEmpty(text) && ehTagDatabase != null && !text.endsWith(" ")) {
+        if (!TextUtils.isEmpty(text) && ehTagDatabase != null) {
             String[] s = text.split(" ");
             if (s.length > 0) {
-                String keyword = s[s.length - 1];
-                List<Pair<String, String>> searchHints = ehTagDatabase.suggest(keyword);
-
-                for (Pair<String, String> searchHint : searchHints) {
-                    if (showTranslation) {
-                        mSuggestionList.add(new TagSuggestion(searchHint.first, searchHint.second));
+                // String keyword = s[s.length - 1];
+                String keyword = "";
+                for (int i = s.length - 1; i >= 0; i--) {
+                    if (s[i].contains(":") || s[i].contains("$")) {
+                        break;
                     } else {
-                        mSuggestionList.add(new TagSuggestion(null, searchHint.second));
+                        if(keyword.isEmpty())
+                            keyword = s[i];
+                        else
+                            keyword = s[i] + " " + keyword;
+                    }
+                }
+                keyword = keyword.trim();
+
+                if(!keyword.isEmpty()) 
+                {
+                    List<Pair<String, String>> searchHints = ehTagDatabase.suggest(keyword);
+
+                    for (Pair<String, String> searchHint : searchHints) {
+                        if (showTranslation) {
+                            mSuggestionList.add(new TagSuggestion(searchHint.first, searchHint.second));
+                        } else {
+                            mSuggestionList.add(new TagSuggestion(null, searchHint.second));
+                        }
                     }
                 }
             }
@@ -307,6 +326,10 @@ public class SearchBar extends CardView implements View.OnClickListener,
         lp.leftMargin = left;
         lp.rightMargin = right;
         mEditText.setLayoutParams(lp);
+    }
+
+    public void setIsComeFromDownload(boolean isComeFromDownload){
+        this.isComeFromDownload = isComeFromDownload;
     }
 
     private void applySearch() {
@@ -659,30 +682,81 @@ public class SearchBar extends CardView implements View.OnClickListener,
             return show;
         }
 
+        /**
+         * 无法替换中文
+         * @param text1
+         * @param text2
+         * @return
+         */
+        public String removeCommonSubstring(String text1, String text2) {
+            int m = text1.length();
+            int n = text2.length();
+            String match = "";
+
+            for (int i = m - 1; i >= 0; i--) {
+                String tmp = text1.substring(i, m);
+                if (!text2.contains(tmp)) {
+                    break;
+                } else {
+                    match = tmp;
+                }
+            }
+
+            String result = text1.substring(0, m - match.length());
+            return result;
+        }
+
+        public String replaceCommonSubstring(String tagKey, Editable editable) {
+            String key = tagKey;
+            if (editable.toString().contains(" ")) {
+                StringBuilder builder = new StringBuilder(editable);
+                char c = ' ';
+                while (builder.charAt(builder.length() - 1) != c) {
+                    builder.deleteCharAt(builder.length() - 1);
+                }
+
+                while (builder.length() != 0 && builder.charAt(builder.length() - 1) == c) {
+                    builder.deleteCharAt(builder.length() - 1);
+                }
+
+                builder.append("  ").append(tagKey);
+                key = builder.toString();
+            }
+            return key;
+        }
+
         @Override
         public void onClick() {
             Editable editable = mEditText.getText();
             if (editable != null) {
-                String key = mKeyword;
-                if (editable.toString().contains(" ")) {
-                    StringBuilder builder = new StringBuilder(editable);
-                    char c = ' ';
-                    while (builder.charAt(builder.length() - 1) != c) {
-                        builder.deleteCharAt(builder.length() - 1);
-                    }
-                    if (builder.length() != 0) {
-                        while (builder.charAt(builder.length() - 1) == c) {
-                            builder.deleteCharAt(builder.length() - 1);
-                        }
-                    }
-
-                    builder.append("  ").append(mKeyword);
-                    key = builder.toString();
-                }
-                mEditText.setText(key);
+                String tagKey = rebuildKeyword(mKeyword);
+//                String newText = removeCommonSubstring(editable.toString(), mKeyword)+" "+tagKey;
+                String newText = replaceCommonSubstring(tagKey,editable);
+                mEditText.setText(newText);
                 mEditText.setSelection(mEditText.getText().length());
             }
         }
+
+        private String rebuildKeyword(String key) {
+            String[] strings = key.split(":");
+            if (strings.length != 2) {
+                return key;
+            }
+            String groupName;
+            String tagName = strings[1];
+            if (isComeFromDownload){
+                groupName = strings[0];
+                return groupName+":"+tagName;
+            }
+            if (NAMESPACE_TO_PREFIX.containsKey(strings[0])) {
+                groupName = NAMESPACE_TO_PREFIX.get(strings[0]);
+                return groupName + "\"" + tagName + "$\"";
+            } else {
+                return key;
+            }
+        }
+
+
 
         @Override
         public void onLongClick() {

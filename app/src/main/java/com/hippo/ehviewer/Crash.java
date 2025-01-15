@@ -16,6 +16,7 @@
 
 package com.hippo.ehviewer;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageInfo;
@@ -26,9 +27,9 @@ import androidx.annotation.NonNull;
 import com.hippo.scene.StageActivity;
 import com.hippo.util.PackageUtils;
 import com.hippo.util.ReadableTime;
-import com.hippo.yorozuya.FileUtils;
-import com.hippo.yorozuya.IOUtils;
-import com.hippo.yorozuya.OSUtils;
+import com.hippo.lib.yorozuya.FileUtils;
+import com.hippo.lib.yorozuya.IOUtils;
+import com.hippo.lib.yorozuya.OSUtils;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -42,6 +43,7 @@ public final class Crash {
     return null != str ? str : "null";
   }
 
+  @SuppressLint("HardwareIds")
   private static void collectInfo(Context context, FileWriter fw) throws IOException {
     try {
       PackageManager pm = context.getPackageManager();

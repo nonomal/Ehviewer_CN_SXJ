@@ -154,7 +154,7 @@
     <string name="app_waring">The content of this application is from the Internet. Some of it may do physical or mental harm to you. You have learnt the risks above and would like to undertake them.</string>
     <string name="error_username_cannot_empty">Username cannot be an empty string</string>
     <string name="error_password_cannot_empty">Password cannot be an empty string</string>
-    <string name="skip_signing_in">Continue without signing in</string>
+    <string name="guest_mode">Continue with Guest Mode</string>
     <string name="sign_in_failed">Sign in failed</string>
     <string name="sign_in_failed_tip">If this issue continues, try \"Sign in via WebView\" or \"Sign in via cookies\"</string>
     <string name="sign_in_failed_plain">Perhaps it is a mistake due to website update or something wrong happened. You may try sign in via WebView or enter cookie or skip signing in under sign in button. But you may be a "Sad Panda" after skipping signing in. Try "Sign in via cookies" first if you had signed in on 0.6.x version.</string>
@@ -364,7 +364,7 @@
     <string name="go_to">Go to</string>
 
     <!-- Download -->
-    <string name="scene_download_title">Download - %s</string>
+    <string name="scene_download_title">%s Galleries - %s</string>
     <string name="no_download_info">Download items will be shown here</string>
     <string name="download_state_none">Idle</string>
     <string name="download_state_wait">Waiting</string>
@@ -785,13 +785,52 @@
     <string name="no_archives">No Archives</string>
     <string name="download_archive_started">Archive download started</string>
     <string name="download_archive_failure">Failed to download archive</string>
-    <string name="archive">Archive</string>
-    <string name="download_archive_failure_no_hath">Need H@H client for archive download</string>
+    <string name="h_h">H@H</string>
+    <string name="download_h_h_failure_no_hath">Need H@H client for archive download</string>
     <string name="settings_privacy">Privacy</string>
     <string name="settings_privacy_secure">Prevent screenshots</string>
     <string name="settings_privacy_secure_summary">Prevent the content of the app from being taken screenshots of or shown in the \"Recent Apps\" list.</string>
 
     <string name="download_service">Download Service</string>
     <string name="favorite_name">Favorite</string>
+    <string name="settings_eh_list_show_read_progress">Show reading progress</string>
+    <string name="settings_eh_list_show_read_progress_summary">Display reading progress for each gallery in detail list mode</string>
+    <string name="cookie_login_import_in_clipboard">Import from clipboard</string>
+    <string name="no_cookie_in_clipboard">No valid data found from clipboard</string>
+    <string name="gallery_update_dialog_title">Update method</string>
+    <string name="gallery_update_dialog_message">Overwrite old gallery: Only the downloaded version will be kept, the old version will be deleted.\nDownload as new gallery: The downloaded gallery will exist as a new gallery, and both the new gallery and the old gallery will be saved.</string>
+    <string name="gallery_update_download_as_new">Download as new</string>
+    <string name="gallery_update_override_old">Overwrite old</string>
+    <string name="loading_db_file">Data Loading …</string>
+    <string name="settings_eh_history_size">Number of historical records</string>
+    <string name="history_info_unlimited">Unlimited</string>
+    <string name="archiver">Archiver</string>
+    <string name="archiver_dialog_current_funds">Current Funds:</string>
+    <string name="archiver_dialog_download_original">Download Original Archive</string>
+    <string name="archiver_dialog_download_resample">Download Resample Archive</string>
+    <string name="archiver_dialog_size">Estimated Size:  %s</string>
+    <string name="dialog_archiver_title">Archiver Downloader</string>
+    <string name="download_receiver_label">EhViewer Download Receiver</string>
+    <string name="decompressed_successfully">Decompressed successfully!</string>
+    <string name="decompression_failed">Decompression failed!</string>
+    <string name="download_label_archiver">Archiver</string>
+    <string name="cookie_in_clipboard_incorrect">Cookie format is incorrect</string>
+    <string name="settings_download_timeout">Download timeout</string>
+    <string name="download_timeout_unlimited">Unlimited</string>
+    <string name="settings_download_timeout_summary">%s(S),Maximum time allowed to download an image.</string>
+    <string name="have_new_version">Click to see new gallery version</string>
+    <string name="archiver_downloading">Arc Downloading %s</string>
+    <string name="order">Order</string>
+    <string name="sort_by_pub_time">Published Time</string>
+    <string name="sort_by_fav_time">Favorited Time</string>
+    <string name="settings_eh_sign_out_restart">Automatically restarting for you, please wait</string>
+    <!--  订阅服务  -->
+    <string name="subscription_watched">Watched</string>
+    <string name="subscription_hidden">Hidden</string>
+    <string name="delete_subscription_title">Remove Tag</string>
+    <string name="can_not_use_this_tag">Tags are not available</string>
+    <string name="add_tag_dialog_title">Add Tag</string>
+    <string name="tag_title">Tag</string>
+    <string name="subscription_success">%s success</string>
 
 </resources>

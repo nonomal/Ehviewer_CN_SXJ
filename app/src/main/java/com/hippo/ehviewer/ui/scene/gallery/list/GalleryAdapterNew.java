@@ -18,6 +18,8 @@ package com.hippo.ehviewer.ui.scene.gallery.list;
 
 import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -46,16 +48,20 @@ import com.hippo.ehviewer.widget.SimpleRatingView;
 import com.hippo.ehviewer.widget.TileThumbNew;
 import com.hippo.widget.LoadImageViewNew;
 import com.hippo.widget.recyclerview.AutoStaggeredGridLayoutManager;
-import com.hippo.yorozuya.ViewUtils;
+import com.hippo.lib.yorozuya.ViewUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.concurrent.ExecutorService;
+
+import com.hippo.ehviewer.spider.SpiderQueen;
 
 abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.GalleryHolder> {
 
     @IntDef({TYPE_LIST, TYPE_GRID})
     @Retention(RetentionPolicy.SOURCE)
-    public @interface Type {}
+    public @interface Type {
+    }
 
     public static final int TYPE_INVALID = -1;
     public static final int TYPE_LIST = 0;
@@ -70,16 +76,21 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     private MarginItemDecoration mGirdDecoration;
     private final int mListThumbWidth;
     private final int mListThumbHeight;
+    private final boolean showReadProgress;
     private int mType = TYPE_INVALID;
     private boolean mShowFavourite;
     private OnThumbItemClickListener myOnThumbItemClickListener;
 
     private DownloadManager mDownloadManager;
 
+    private final ExecutorService executor;
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
 
     public GalleryAdapterNew(@NonNull LayoutInflater inflater, @NonNull Resources resources,
-                             @NonNull RecyclerView recyclerView, int type, boolean showFavourited) {
+                             @NonNull RecyclerView recyclerView, int type, boolean showFavourited, ExecutorService executor, boolean showReadProgress) {
+        this.executor = executor;
+        this.showReadProgress = showReadProgress;
         mInflater = inflater;
         mResources = resources;
         mRecyclerView = recyclerView;
@@ -173,7 +184,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                 break;
         }
 
-        GalleryAdapterNew.GalleryHolder holder = new GalleryAdapterNew.GalleryHolder(mInflater.inflate(layoutId, parent, false),myOnThumbItemClickListener,viewType);
+        GalleryAdapterNew.GalleryHolder holder = new GalleryAdapterNew.GalleryHolder(mInflater.inflate(layoutId, parent, false), myOnThumbItemClickListener, viewType);
 
         if (viewType == TYPE_LIST) {
             ViewGroup.LayoutParams lp = holder.thumb.getLayoutParams();
@@ -191,7 +202,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
     }
 
     @Nullable
-    public  GalleryInfo getDataAt(int position) {
+    public GalleryInfo getDataAt(int position) {
         return null;
     }
 
@@ -220,7 +231,22 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
                     holder.pages.setText(null);
                     holder.pages.setVisibility(View.GONE);
                 } else {
-                    holder.pages.setText(gi.pages + "P");
+                    if (showReadProgress){
+                        executor.submit(()->{
+                            int startPage = SpiderQueen.findStartPage(mInflater.getContext(), gi);
+                            handler.post(()->{
+                                String text;
+                                if (startPage > 0) {
+                                    text = startPage + 1 + "/" + gi.pages + "P";
+                                    holder.pages.setText(text);
+                                } else {
+                                    text = "0/" + gi.pages + "P";
+                                    holder.pages.setText(text);
+                                }
+                            });
+                        });
+                    }
+                    holder.pages.setText(new StringBuffer(gi.pages + "P"));
                     holder.pages.setVisibility(View.VISIBLE);
                 }
                 if (TextUtils.isEmpty(gi.simpleLanguage)) {
@@ -253,12 +279,12 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         ViewCompat.setTransitionName(holder.thumb, TransitionNameFactory.getThumbTransitionName(gi.gid));
     }
 
-    public void setThumbItemClickListener(OnThumbItemClickListener listener){
+    public void setThumbItemClickListener(OnThumbItemClickListener listener) {
         myOnThumbItemClickListener = listener;
     }
 
-    public interface OnThumbItemClickListener{
-        void onThumbItemClick(int position,View view,GalleryInfo gi);
+    public interface OnThumbItemClickListener {
+        void onThumbItemClick(int position, View view, GalleryInfo gi);
     }
 
     public class GalleryHolder extends RecyclerView.ViewHolder {
@@ -274,7 +300,7 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
         public final ImageView favourite;
         public final ImageView downloaded;
 
-        public GalleryHolder(View itemView,final OnThumbItemClickListener onThumbItemClickListener,int mType) {
+        public GalleryHolder(View itemView, final OnThumbItemClickListener onThumbItemClickListener, int mType) {
             super(itemView);
             thumb = itemView.findViewById(R.id.thumb_new);
             title = itemView.findViewById(R.id.title);
@@ -286,11 +312,11 @@ abstract class GalleryAdapterNew extends RecyclerView.Adapter<GalleryAdapterNew.
             simpleLanguage = itemView.findViewById(R.id.simple_language);
             favourite = itemView.findViewById(R.id.favourited);
             downloaded = itemView.findViewById(R.id.downloaded);
-            if (mType == 0){
+            if (mType == 0) {
                 thumb.setOnClickListener(v -> {
-                    if (onThumbItemClickListener != null){
-                        int position = getAdapterPosition();
-                        onThumbItemClickListener.onThumbItemClick(position,itemView,getDataAt(position));
+                    if (onThumbItemClickListener != null) {
+                        int position = getBindingAdapterPosition();
+                        onThumbItemClickListener.onThumbItemClick(position, itemView, getDataAt(position));
                     }
                 });
             }

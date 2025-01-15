@@ -5,18 +5,19 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.AbsListView;
 import android.widget.FrameLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.widget.Toolbar;
 import androidx.viewpager.widget.ViewPager;
 
 import com.hippo.app.EditTextDialogBuilder;
 import com.hippo.ehviewer.EhApplication;
 import com.hippo.ehviewer.R;
-import com.hippo.ehviewer.Settings;
 import com.hippo.ehviewer.callBack.SubscriptionCallback;
 import com.hippo.ehviewer.client.EhClient;
 import com.hippo.ehviewer.client.EhRequest;
@@ -31,17 +32,23 @@ import com.hippo.ehviewer.ui.scene.EhCallback;
 import com.hippo.scene.Announcer;
 import com.hippo.scene.SceneFragment;
 import com.hippo.widget.ProgressView;
-import com.hippo.yorozuya.AssertUtils;
-import com.hippo.yorozuya.ViewUtils;
+import com.hippo.lib.yorozuya.AssertUtils;
+import com.hippo.lib.yorozuya.ViewUtils;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import static com.hippo.ehviewer.Settings.*;
 
 public class SubscriptionDraw {
+
+    private static final String SUBSCRIPTION_DRAW_SCROLL_Y = "SubscriptionDrawScrollY";
+    private static final String SUBSCRIPTION_DRAW_POS = "SubscriptionDrawPos";
+
     private final Context context;
     private final LayoutInflater inflater;
+
+    final private EhApplication ehApplication;
+
     private ListView listView;
     private ProgressView progressView;
     private FrameLayout frameLayout;
@@ -56,19 +63,23 @@ public class SubscriptionDraw {
 
     private UserTagList userTagList;
 
-    private EhTagDatabase ehTags;
+    private final EhTagDatabase ehTags;
 
     private String tagName;
 
-    public SubscriptionDraw(Context context, LayoutInflater inflater, EhClient ehClient, String mTag, EhTagDatabase ehTags) {
+
+
+    public SubscriptionDraw(@NonNull Context context, LayoutInflater inflater, EhClient ehClient, String mTag, EhTagDatabase ehTags) {
         this.context = context;
         this.inflater = inflater;
         this.ehClient = ehClient;
         this.mTag = mTag;
-        if (ehTags == null){
+        if (ehTags == null) {
             this.ehTags = EhTagDatabase.getInstance(context);
+        } else {
+            this.ehTags = ehTags;
         }
-        this.ehTags = ehTags;
+        ehApplication = (EhApplication) context.getApplicationContext();
     }
 
     @SuppressLint("NonConstantResourceId")
@@ -80,7 +91,7 @@ public class SubscriptionDraw {
 
         progressView = (ProgressView) ViewUtils.$$(subscriptionView, R.id.tag_list_view_progress);
         frameLayout = (FrameLayout) ViewUtils.$$(subscriptionView, R.id.tag_list_parent);
-        textView = (TextView)ViewUtils.$$(subscriptionView,R.id.not_login_text);
+        textView = (TextView) ViewUtils.$$(subscriptionView, R.id.not_login_text);
         frameLayout.setVisibility(View.GONE);
 
         Toolbar toolbar = (Toolbar) ViewUtils.$$(subscriptionView, R.id.toolbar);
@@ -118,52 +129,65 @@ public class SubscriptionDraw {
         return subscriptionView;
     }
 
+    public void setUserTagList(UserTagList tagList){
+        if (this.userTagList == null){
+            this.userTagList = tagList;
+        }else {
+            this.userTagList.userTags = tagList.userTags;
+        }
+
+    }
+
     private void seeDetailPage() {
-        if(!isLogin()){
-            Toast.makeText(context,R.string.settings_eh_identity_cookies_tourist,Toast.LENGTH_SHORT).show();
+        if (!isLogin()) {
+            Toast.makeText(context, R.string.settings_eh_identity_cookies_tourist, Toast.LENGTH_SHORT).show();
             return;
         }
-        if (userTagList == null){
-            Toast.makeText(context,R.string.empty_subscription,Toast.LENGTH_SHORT).show();
+        if (userTagList == null) {
+            Toast.makeText(context, R.string.empty_subscription, Toast.LENGTH_SHORT).show();
             return;
         }
-        userTagList.stageId=activity.getStageId();
-        EhApplication.saveUserTagList(context,userTagList);
+        userTagList.stageId = activity.getStageId();
+        EhApplication.saveUserTagList(context, userTagList);
         activity.startScene(new Announcer(SubscriptionsScene.class));
     }
 
     private void bindViewSecond() {
         progressView.setVisibility(View.GONE);
         frameLayout.setVisibility(View.VISIBLE);
-        if (userTagList.userTags.isEmpty()){
-            if (isLogin()){
+        if (userTagList.userTags.isEmpty()) {
+            if (isLogin()) {
                 textView.setVisibility(View.VISIBLE);
             }
             return;
         }
-        List<String> name = new ArrayList<>();
+//        List<String> name = new ArrayList<>();
+//
+//        for (UserTag userTag : userTagList.userTags) {
+//            name.add(userTag.getName(ehTags));
+//        }
 
-        for (UserTag userTag : userTagList.userTags) {
-            name.add(userTag.getName(ehTags));
-        }
-
-        SubscriptionItemAdapter adapter = new SubscriptionItemAdapter(context,userTagList,ehTags);
+        SubscriptionItemAdapter adapter = new SubscriptionItemAdapter(context, userTagList, ehTags);
 
         listView.setAdapter(adapter);
         listView.setOnItemClickListener((parent, view1, position, id) -> {
             UserTag tag = userTagList.userTags.get(position);
             callback.onSubscriptionItemClick(tag.tagName);
         });
+        listView.setOnScrollListener(new ScrollListener());
+        if (userTagList.size()>0){
+            resume();
+        }
     }
 
     private void addNewTag() {
-        if(!isLogin()){
-            Toast.makeText(context,R.string.settings_eh_identity_cookies_tourist,Toast.LENGTH_SHORT).show();
+        if (!isLogin()) {
+            Toast.makeText(context, R.string.settings_eh_identity_cookies_tourist, Toast.LENGTH_SHORT).show();
             return;
         }
         tagName = callback.getAddTagName(userTagList);
-        if (tagName == null){
-            Toast.makeText(context,R.string.can_not_use_this_tag,Toast.LENGTH_SHORT).show();
+        if (tagName == null) {
+            Toast.makeText(context, R.string.can_not_use_this_tag, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -172,22 +196,17 @@ public class SubscriptionDraw {
         builder.setTitle(R.string.add_tag_dialog_title);
         builder.setPositiveButton(R.string.subscription_watched, this::onDialogPositiveButtonClick);
         builder.setNegativeButton(R.string.subscription_hidden, this::onDialogNegativeButtonClick);
-//        final AlertDialog dialog = builder.show();
         builder.show();
-//        dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener(v -> {
-//            dialog.dismiss();
-//            requestTag(tagName,true);
-//        });
     }
 
-    private void onDialogNegativeButtonClick(DialogInterface dialog, int which){
+    private void onDialogNegativeButtonClick(DialogInterface dialog, int which) {
         dialog.dismiss();
-        requestTag(tagName,false);
+        requestTag(tagName, false);
     }
 
-    private void onDialogPositiveButtonClick(DialogInterface dialog, int which){
+    private void onDialogPositiveButtonClick(DialogInterface dialog, int which) {
         dialog.dismiss();
-        requestTag(tagName,true);
+        requestTag(tagName, true);
     }
 
     private void loadData() throws EhException {
@@ -197,7 +216,7 @@ public class SubscriptionDraw {
         }
     }
 
-    private void  requestTag(String tagName,boolean tagState){
+    private void requestTag(String tagName, boolean tagState) {
         String url = EhUrl.getMyTag();
 
         if (null == context || null == activity) {
@@ -207,21 +226,21 @@ public class SubscriptionDraw {
         progressView.setVisibility(View.VISIBLE);
         frameLayout.setVisibility(View.GONE);
 
-        EhClient.Callback callback = new SubscriptionDetailListener(context, activity.getStageId(), mTag);
+        EhClient.Callback<UserTagList> callback = new SubscriptionDetailListener(context, activity.getStageId(), mTag);
 
         TagPushParam param = new TagPushParam();
 
         param.tagNameNew = tagName;
-        if (tagState){
+        if (tagState) {
             param.tagWatchNew = "on";
-        }else {
+        } else {
             param.tagHiddenNew = "on";
         }
 
 
         EhRequest mRequest = new EhRequest()
                 .setMethod(EhClient.METHOD_ADD_TAG)
-                .setArgs(url,param).setCallback(callback);
+                .setArgs(url, param).setCallback(callback);
 
         ehClient.execute(mRequest);
     }
@@ -229,7 +248,6 @@ public class SubscriptionDraw {
     /**
      * 请求数据
      *
-     * @return
      */
     private boolean request() {
 
@@ -240,7 +258,7 @@ public class SubscriptionDraw {
             return false;
         }
 
-        EhClient.Callback callback = new SubscriptionDetailListener(context, activity.getStageId(), mTag);
+        EhClient.Callback<UserTagList> callback = new SubscriptionDetailListener(context, activity.getStageId(), mTag);
 
         EhRequest mRequest = new EhRequest()
                 .setMethod(EhClient.METHOD_GET_WATCHED)
@@ -249,6 +267,14 @@ public class SubscriptionDraw {
         ehClient.execute(mRequest);
 
         return true;
+    }
+
+    public void resume() {
+        Object scrollY = ehApplication.getTempCache(SUBSCRIPTION_DRAW_SCROLL_Y);
+        Object pos = ehApplication.getTempCache(SUBSCRIPTION_DRAW_POS);
+        if (scrollY != null && pos != null) {
+            listView.setSelection((Integer) pos);
+        }
     }
 
 
@@ -266,13 +292,13 @@ public class SubscriptionDraw {
         @Override
         public void onSuccess(UserTagList result) {
 
-            if (result == null){
+            if (result == null) {
                 userTagList = new UserTagList();
                 userTagList.userTags = new ArrayList<>();
-            }else {
+            } else {
                 userTagList = result;
             }
-            EhApplication.saveUserTagList(context,userTagList);
+            EhApplication.saveUserTagList(context, userTagList);
             bindViewSecond();
             needLoad = false;
         }
@@ -288,5 +314,26 @@ public class SubscriptionDraw {
         }
     }
 
+    private class ScrollListener implements AbsListView.OnScrollListener {
+        public ScrollListener() {
+            super();
+        }
 
+        @Override
+        public void onScrollStateChanged(AbsListView view, int scrollState) {
+            View item = view.getChildAt(0);
+            if (item == null) {
+                return;
+            }
+            int firstPos = view.getFirstVisiblePosition();
+            int top = item.getTop();
+            int scrollY = firstPos * item.getHeight() - top;
+            ehApplication.putTempCache(SUBSCRIPTION_DRAW_SCROLL_Y, scrollY);
+            ehApplication.putTempCache(SUBSCRIPTION_DRAW_POS, firstPos);
+        }
+
+        @Override
+        public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
+        }
+    }
 }
